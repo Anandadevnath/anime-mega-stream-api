@@ -7,16 +7,17 @@ const extractRoutingPageInfo = async (url) => {
         const $ = cheerio.load(res.data);
 
         const description = $('.line-clamp-3').text().trim();
+        const watchLink = $('.flex.items-center.justify-center.sm\\:justify-start.gap-2.mbe-5.relative.flex-wrap a').attr('href') || null;
 
         const metaInfo = [];
         $('.anime-metadata li').each((i, el) => {
             const text = $(el).text().trim();
-            metaInfo.push({ text});
+            metaInfo.push({ text });
         });
 
-        return {description, metaInfo };
+        return { description, metaInfo, watchLink };
     } catch (error) {
-        return { mainTitle: '', description: '', metaInfo: [] };
+        return { description: '', metaInfo: [], watchLink: null };
     }
 };
 
@@ -38,7 +39,7 @@ export const AniHQ = async (page = 1) => {
             routing_info = await extractRoutingPageInfo(page_links);
         }
 
-        if (page_links && img && title && title_show && Television ) {
+        if (page_links && img && title && title_show && Television) {
             return {
                 page_links,
                 img,
