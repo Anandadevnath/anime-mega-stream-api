@@ -5,7 +5,8 @@ export const AnimeAZ = async (pageNum = 1) => {
     const page = await browser.newPage();
     
     try {
-        await page.goto('https://w1.123animes.ru/az-all-anime/all');
+        const url = `https://w1.123animes.ru/az-all-anime/all/?page=${pageNum}`;
+        await page.goto(url);
         await page.waitForSelector('.film-list', { timeout: 10000 });
        
         const Animelist = await page.evaluate(() => {
@@ -13,21 +14,66 @@ export const AnimeAZ = async (pageNum = 1) => {
                 .map(inner => {
                     const links = inner.querySelectorAll('a[href]');
                     if (links.length >= 2) {
-                        const secondLink = links[1]; // Get the 2nd <a> tag
+                        const firstLink = links[0];   
+                        const secondLink = links[1];  
+        
+                        const img = firstLink.querySelector('img');
+                        let imageSrc = img ? img.src : null;
+                    
+                        if (imageSrc && imageSrc.includes('no_poster.jpg')) {
+                            const dataSrc = img.getAttribute('data-src');
+                            const dataSrcSet = img.getAttribute('data-srcset');
+                            if (dataSrc && !dataSrc.includes('no_poster.jpg')) {
+                                imageSrc = dataSrc;
+                            } else if (dataSrcSet && !dataSrcSet.includes('no_poster.jpg')) {
+                                imageSrc = dataSrcSet.split(',')[0].trim().split(' ')[0];
+                            } else {
+                                imageSrc = null; 
+                            }
+                        }
+                        
+                        if (imageSrc && imageSrc.startsWith('/')) {
+                            imageSrc = 'https://w1.123animes.ru' + imageSrc;
+                        }
+                        
+                        const statusDiv = firstLink.querySelector('.status');
+                        let episodes = null;
+                        let type = null;
+                        
+                        if (statusDiv) {
+                            const epDiv = statusDiv.querySelector('.ep');
+                            const subSpan = statusDiv.querySelector('.sub');
+                            
+                            if (epDiv) {
+                                episodes = epDiv.textContent.trim();
+                            }
+                            
+                            if (subSpan) {
+                                type = subSpan.textContent.trim();
+                            } else {
+                                const title = secondLink.getAttribute('data-jititle') || secondLink.textContent.trim();
+                                if (title.toLowerCase().includes('dub')) {
+                                    type = 'DUB';
+                                } else {
+                                    type = 'SUB'; 
+                                }
+                            }
+                        }
+                        
                         return {
                             title: secondLink.getAttribute('data-jititle') || secondLink.textContent.trim(),
-                            link: secondLink.href
+                            link: secondLink.href,
+                            image: imageSrc,
+                            episodes: episodes,
+                            type: type
                         };
                     }
                     return null;
                 })
                 .filter(item => item !== null);
         });
-        
-        // console.log(`Found ${Animelist.length} anime links:`);
-        // Animelist.forEach((anime, index) => {
-        //     console.log(`${index + 1}. ${anime.title} - ${anime.link}`);
-        // });
+
+        console.log(`📺 Page ${pageNum}: Fetched ${Animelist.length} anime titles`);
         
         return Animelist;
         
