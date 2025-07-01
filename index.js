@@ -14,10 +14,11 @@ app.get('/anime-list', async (req, res) => {
 
         const formattedList = animeList.map(anime => ({
             title: anime.title,
-            redirectlink: anime.link,
+            redirectlink: anime.redirectlink,
+            details: anime.details,
             image: anime.image,
-            total_episodes: anime.episodes,
-            type: anime.type
+            total_episodes: anime.total_episodes,
+            lang: anime.type
         }));
 
         res.json(formattedList);
@@ -28,5 +29,6 @@ app.get('/anime-list', async (req, res) => {
 
 app.listen(5000, () => {
     console.log('Server running at http://localhost:5000');
-
+    console.log('Available endpoints:');
+    console.log('  GET /anime-list?page=1 - Get detailed anime list');
 });
