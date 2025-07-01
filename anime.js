@@ -1,64 +1,28 @@
-import * as cheerio from 'cheerio';
-import axios from 'axios';
+import puppeteer from 'puppeteer';
 
-const extractRoutingPageInfo = async (url) => {
+export const Aniscrape = async (pageNum = 1) => {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    
     try {
-        const res = await axios.get(url);
-        const $ = cheerio.load(res.data);
-
-        const description = $('.line-clamp-3').text().trim();
-        const watchLink = $('.flex.items-center.justify-center.sm\\:justify-start.gap-2.mbe-5.relative.flex-wrap a').attr('href') || null;
-
-        const metaInfo = [];
-        $('.anime-metadata li').each((i, el) => {
-            const text = $(el).text().trim();
-            metaInfo.push({ text });
+        await page.goto('https://w1.123animes.ru/anime/one-piece-dub/episode/8');
+       
+        // Wait for iframe to load
+        await page.waitForSelector('iframe', { timeout: 10000 });
+        
+        // Extract iframe src
+        const iframeSrc = await page.evaluate(() => {
+            const iframe = document.querySelector('#iframe_ext82377 iframe');
+            return iframe ? iframe.src : null;
         });
-
-        return { description, metaInfo, watchLink };
+        
+        console.log('Iframe src:', iframeSrc);
+        return iframeSrc;
+        
     } catch (error) {
-        return { description: '', metaInfo: [], watchLink: null };
-    }
-};
-
-export const AniHQ = async (page = 1) => {
-    const animelist = await axios.get(`https://anihq.to/az-list/page/${page}/`);
-    const $ = cheerio.load(animelist.data);
-
-    const tasks = $('.kira-grid > div').map(async (i, dat) => {
-        const aTag = $(dat).find('.kira-anime > a');
-        const page_links = aTag.attr('href');
-        const title = $(dat).find('span[data-en-title]').text().trim();
-        const title_show = $(dat).find('.show').text().trim();
-        const Television = $(dat).find('.uppercase').text().trim();
-        const imgTag = $(dat).find('.kira-anime img');
-        const img = imgTag.attr('data-lazy-src');
-
-        let routing_info = { mainTitle: '', description: '' };
-        if (page_links) {
-            routing_info = await extractRoutingPageInfo(page_links);
-        }
-
-        if (page_links && img && title && title_show && Television) {
-            return {
-                page_links,
-                img,
-                title,
-                title_show,
-                Television,
-                routing_info
-            };
-        }
+        console.error('Error:', error.message);
         return null;
-    }).get();
-
-    const results = (await Promise.all(tasks)).filter(Boolean);
-
-    return {
-        page,
-        links: {
-            page,
-            results
-        }
-    };
+    } finally {
+        await browser.close();
+    }
 };
