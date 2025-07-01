@@ -7,9 +7,9 @@ export const AnimeAZ = async (pageNum = 1) => {
             '--no-sandbox', 
             '--disable-setuid-sandbox', 
             '--disable-dev-shm-usage',
-            '--disable-images',           // Don't load images
-            '--disable-css',              // Don't load CSS  
-            '--disable-javascript',       // Disable JS after main page
+            '--disable-images',
+            '--disable-css',
+            '--disable-javascript',
             '--no-first-run',
             '--disable-extensions',
             '--disable-plugins',
@@ -87,7 +87,7 @@ export const AnimeAZ = async (pageNum = 1) => {
         await mainPage.close();
         console.log(`📋 Found ${animeList.length} anime on page ${pageNum}`);
 
-        const maxConcurrency = 15; 
+        const maxConcurrency = 10; 
         const pagePool = [];
         
         for (let i = 0; i < maxConcurrency; i++) {
@@ -110,37 +110,77 @@ export const AnimeAZ = async (pageNum = 1) => {
             try {
                 await page.goto(animeUrl, { 
                     waitUntil: 'domcontentloaded',
-                    timeout: 3000 
+                    timeout: 5000 
                 });
                 
+                try {
+                    await page.waitForSelector('.anxmnx', { timeout: 3000 });
+                } catch (e) {
+                    console.log(`⚠️ .anxmnx not found for ${animeUrl}, trying alternatives`);
+                }
+                
                 return await page.evaluate(() => {
-                    const anxmnxDiv = document.querySelector('.anxmnx');
-                    if (!anxmnxDiv) return { type: null, genre: [] };
+                    let anxmnxDiv = document.querySelector('.anxmnx');
+                    
+                    if (!anxmnxDiv) {
+                        anxmnxDiv = document.querySelector('.info') || 
+                                   document.querySelector('.anime-info') ||
+                                   document.querySelector('.details');
+                    }
+                    
+                    if (!anxmnxDiv) {
+                        console.log('No info div found');
+                        return { type: 'Unknown', genre: ['Unknown'] };
+                    }
                     
                     let type = null;
                     let genre = [];
                     
                     const dtElements = anxmnxDiv.querySelectorAll('dt');
                     
-                    dtElements.forEach(dt => {
-                        const text = dt.textContent.trim().toLowerCase();
-                        const nextDD = dt.nextElementSibling;
-                        
-                        if (text.includes('type:') && nextDD) {
-                            const typeLink = nextDD.querySelector('a');
-                            type = typeLink ? typeLink.textContent.trim() : nextDD.textContent.trim();
+                    if (dtElements.length > 0) {
+                        dtElements.forEach(dt => {
+                            const text = dt.textContent.trim().toLowerCase();
+                            const nextDD = dt.nextElementSibling;
+                            
+                            if (text.includes('type:') && nextDD) {
+                                const typeLink = nextDD.querySelector('a');
+                                type = typeLink ? typeLink.textContent.trim() : nextDD.textContent.trim();
+                            }
+                            
+                            if (text.includes('genre:') && nextDD) {
+                                const genreLinks = nextDD.querySelectorAll('a');
+                                if (genreLinks.length > 0) {
+                                    genre = Array.from(genreLinks).map(link => link.textContent.trim());
+                                } else {
+                                    const genreText = nextDD.textContent.trim();
+                                    if (genreText && genreText !== '') {
+                                        genre = genreText.split(',').map(g => g.trim()).filter(g => g !== '');
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        const infoText = anxmnxDiv.textContent;
+                        const typeMatch = infoText.match(/Type:\s*([^,\n]+)/i);
+                        if (typeMatch) {
+                            type = typeMatch[1].trim();
                         }
                         
-                        if (text.includes('genre:') && nextDD) {
-                            const genreLinks = nextDD.querySelectorAll('a');
-                            genre = Array.from(genreLinks).map(link => link.textContent.trim());
+                        const genreMatch = infoText.match(/Genre:\s*([^,\n]+)/i);
+                        if (genreMatch) {
+                            genre = genreMatch[1].split(',').map(g => g.trim()).filter(g => g !== '');
                         }
-                    });
+                    }
+            
+                    if (!type) type = 'Unknown';
+                    if (genre.length === 0) genre = ['Unknown'];
                     
                     return { type, genre };
                 });
             } catch (error) {
-                return { type: null, genre: [] };
+                console.log(`❌ Error fetching details for ${animeUrl}: ${error.message}`);
+                return { type: 'Unknown', genre: ['Unknown'] };
             }
         };
 
@@ -176,7 +216,7 @@ export const AnimeAZ = async (pageNum = 1) => {
         // Close page pool
         await Promise.all(pagePool.map(page => page.close()));
 
-        console.log(`🚀 Page ${pageNum}: Fetched ${detailedAnimeList.length} anime in TURBO mode!`);
+        console.log(`🚀 Page ${pageNum}: Fetched ${detailedAnimeList.length} anime with improved error handling!`);
         return detailedAnimeList;
 
     } catch (error) {
