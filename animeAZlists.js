@@ -87,7 +87,7 @@ export const AnimeAZ = async (pageNum = 1) => {
         await mainPage.close();
         console.log(`📋 Found ${animeList.length} anime on page ${pageNum}`);
 
-        const maxConcurrency = 10; 
+        const maxConcurrency = 4; // Reduced for iframe processing
         const pagePool = [];
         
         for (let i = 0; i < maxConcurrency; i++) {
@@ -106,17 +106,48 @@ export const AnimeAZ = async (pageNum = 1) => {
             pagePool.push(page);
         }
 
+        // Function to extract iframe src - EXACT SAME AS YOUR WORKING CODE
+        const getEpisodeIframeSrc = async (episodeUrl, page) => {
+            try {
+                await page.goto(episodeUrl);
+                
+                // Wait for iframe to load - EXACT SAME AS YOUR CODE
+                await page.waitForSelector('iframe', { timeout: 10000 });
+                
+                // Extract iframe src - EXACT SAME AS YOUR CODE
+                const iframeSrc = await page.evaluate(() => {
+                    const iframe = document.querySelector('#iframe_ext82377 iframe');
+                    return iframe ? iframe.src : null;
+                });
+                
+                console.log(`🎬 Iframe src for ${episodeUrl}:`, iframeSrc);
+                return iframeSrc;
+                
+            } catch (error) {
+                console.log(`❌ Error extracting iframe from ${episodeUrl}: ${error.message}`);
+                return null;
+            }
+        };
+
         const getAnimeDetailsFast = async (animeUrl, page) => {
             try {
                 await page.goto(animeUrl, { 
                     waitUntil: 'domcontentloaded',
-                    timeout: 5000 
+                    timeout: 10000 
                 });
                 
+                // Wait for info section
                 try {
-                    await page.waitForSelector('.anxmnx', { timeout: 3000 });
+                    await page.waitForSelector('.anxmnx', { timeout: 4000 });
                 } catch (e) {
-                    console.log(`⚠️ .anxmnx not found for ${animeUrl}, trying alternatives`);
+                    console.log(`⚠️ .anxmnx not found for ${animeUrl}`);
+                }
+                
+                // Wait for episode containers
+                try {
+                    await page.waitForSelector('.episodes', { timeout: 3000 });
+                } catch (e) {
+                    console.log(`⚠️ Episode container not found for ${animeUrl}`);
                 }
                 
                 return await page.evaluate(() => {
@@ -130,12 +161,14 @@ export const AnimeAZ = async (pageNum = 1) => {
                     
                     if (!anxmnxDiv) {
                         console.log('No info div found');
-                        return { type: 'Unknown', genre: ['Unknown'] };
+                        return { type: 'Unknown', genre: ['Unknown'], episode_links: [] };
                     }
                     
                     let type = null;
                     let genre = [];
+                    let episode_links = [];
                     
+                    // Extract type and genre
                     const dtElements = anxmnxDiv.querySelectorAll('dt');
                     
                     if (dtElements.length > 0) {
@@ -160,27 +193,77 @@ export const AnimeAZ = async (pageNum = 1) => {
                                 }
                             }
                         });
-                    } else {
-                        const infoText = anxmnxDiv.textContent;
-                        const typeMatch = infoText.match(/Type:\s*([^,\n]+)/i);
-                        if (typeMatch) {
-                            type = typeMatch[1].trim();
-                        }
+                    }
+
+                    // Extract ALL episode ranges and their episodes
+                    const allEpisodeRanges = document.querySelectorAll('.episodes.range');
+                    
+                    if (allEpisodeRanges.length > 0) {
+                        console.log(`Found ${allEpisodeRanges.length} episode ranges`);
                         
-                        const genreMatch = infoText.match(/Genre:\s*([^,\n]+)/i);
-                        if (genreMatch) {
-                            genre = genreMatch[1].split(',').map(g => g.trim()).filter(g => g !== '');
+                        allEpisodeRanges.forEach((rangeContainer, rangeIndex) => {
+                            const rangeId = rangeContainer.getAttribute('data-range-id');
+                            const rangeStyle = rangeContainer.getAttribute('style');
+                            const isVisible = !rangeStyle || !rangeStyle.includes('display:none');
+                            
+                            console.log(`Range ${rangeIndex + 1}: ID=${rangeId}, Visible=${isVisible}`);
+                            
+                            // Get all episode links in this range
+                            const episodeLinks = rangeContainer.querySelectorAll('li a[href]');
+                            
+                            episodeLinks.forEach(link => {
+                                const episodeNumber = link.textContent.trim();
+                                const episodeUrl = link.href;
+                                
+                                // Only add if it's a valid episode
+                                if (episodeUrl.includes('episode') || /^\d+(\.\d+)?$/.test(episodeNumber)) {
+                                    episode_links.push({
+                                        episode_number: episodeNumber,
+                                        episode_url: episodeUrl,
+                                        range_id: rangeId,
+                                        range_index: rangeIndex + 1
+                                    });
+                                }
+                            });
+                        });
+                    } else {
+                        // Fallback for single episode container
+                        const singleEpisodeContainer = document.querySelector('.episodes');
+                        if (singleEpisodeContainer) {
+                            const episodeLinks = singleEpisodeContainer.querySelectorAll('li a[href]');
+                            
+                            episodeLinks.forEach(link => {
+                                const episodeNumber = link.textContent.trim();
+                                const episodeUrl = link.href;
+                                
+                                if (episodeUrl.includes('episode') || /^\d+(\.\d+)?$/.test(episodeNumber)) {
+                                    episode_links.push({
+                                        episode_number: episodeNumber,
+                                        episode_url: episodeUrl,
+                                        range_id: '0',
+                                        range_index: 1
+                                    });
+                                }
+                            });
                         }
                     }
-            
+                    
+                    // Sort episodes by number
+                    episode_links.sort((a, b) => {
+                        const numA = parseFloat(a.episode_number) || 0;
+                        const numB = parseFloat(b.episode_number) || 0;
+                        return numA - numB;
+                    });
+                    
                     if (!type) type = 'Unknown';
                     if (genre.length === 0) genre = ['Unknown'];
                     
-                    return { type, genre };
+                    console.log(`Total episodes extracted: ${episode_links.length}`);
+                    return { type, genre, episode_links };
                 });
             } catch (error) {
                 console.log(`❌ Error fetching details for ${animeUrl}: ${error.message}`);
-                return { type: 'Unknown', genre: ['Unknown'] };
+                return { type: 'Unknown', genre: ['Unknown'], episode_links: [] };
             }
         };
 
@@ -194,12 +277,32 @@ export const AnimeAZ = async (pageNum = 1) => {
                 const page = pagePool[index % pagePool.length];
                 const details = await getAnimeDetailsFast(anime.redirectlink, page);
                 
+                // Process first 2 episodes to get iframe sources (reduced to avoid timeout)
+                const episodesWithIframes = await Promise.all(
+                    details.episode_links.slice(0, 2).map(async (episode) => {
+                        console.log(`🎬 Getting iframe for ${anime.title} - Episode ${episode.episode_number}`);
+                        const iframeSrc = await getEpisodeIframeSrc(episode.episode_url, page);
+                        
+                        return {
+                            ...episode,
+                            iframe_src: iframeSrc
+                        };
+                    })
+                );
+                
+                // Add remaining episodes without iframe extraction
+                const remainingEpisodes = details.episode_links.slice(2).map(episode => ({
+                    ...episode,
+                    iframe_src: null
+                }));
+                
                 return {
                     title: anime.title,
                     redirectlink: anime.redirectlink,
                     details: {
                         type: details.type,
-                        genre: details.genre
+                        genre: details.genre,
+                        episode_links: [...episodesWithIframes, ...remainingEpisodes]
                     },
                     image: anime.image,
                     total_episodes: anime.total_episodes,
@@ -210,13 +313,19 @@ export const AnimeAZ = async (pageNum = 1) => {
             const chunkResults = await Promise.all(chunkPromises);
             detailedAnimeList.push(...chunkResults);
             
-            console.log(`⚡ Processed ${detailedAnimeList.length}/${animeList.length} anime`);
+            const episodeCount = chunkResults.reduce((total, anime) => total + anime.details.episode_links.length, 0);
+            const iframeCount = chunkResults.reduce((total, anime) => 
+                total + anime.details.episode_links.filter(ep => ep.iframe_src).length, 0);
+            console.log(`⚡ Processed ${detailedAnimeList.length}/${animeList.length} anime (${episodeCount} episodes, ${iframeCount} with iframes)`);
         }
 
         // Close page pool
         await Promise.all(pagePool.map(page => page.close()));
 
-        console.log(`🚀 Page ${pageNum}: Fetched ${detailedAnimeList.length} anime with improved error handling!`);
+        const totalEpisodes = detailedAnimeList.reduce((total, anime) => total + anime.details.episode_links.length, 0);
+        const totalIframes = detailedAnimeList.reduce((total, anime) => 
+            total + anime.details.episode_links.filter(ep => ep.iframe_src).length, 0);
+        console.log(`🚀 Page ${pageNum}: Fetched ${detailedAnimeList.length} anime with ${totalEpisodes} episodes (${totalIframes} with iframe sources)!`);
         return detailedAnimeList;
 
     } catch (error) {
