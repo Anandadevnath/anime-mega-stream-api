@@ -5,6 +5,7 @@
     "express": "^5.1.0",
     "gb": "^0.0.3",
     "p-limit": "^6.2.0",
+    "playwright": "^1.53.2",
     "puppeteer": "^24.10.1",
     "selenium-webdriver": "^4.33.0"
   },
