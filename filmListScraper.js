@@ -18,14 +18,11 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
     const page = await context.newPage();
     
     try {
-        // Allow images temporarily to get poster data
         await page.route('**/*', (route) => {
             const resourceType = route.request().resourceType();
             const url = route.request().url();
             
-            // Block only heavy resources but allow small images for posters
-            if (['stylesheet', 'font', 'media'].includes(resourceType) ||
-                (resourceType === 'image' && url.includes('.gif'))) {
+            if (['stylesheet', 'font', 'media'].includes(resourceType)) {
                 route.abort();
             } else {
                 route.continue();
@@ -35,17 +32,94 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
         console.log('🌐 Loading film list page...');
         await page.goto(baseUrl, { 
             waitUntil: 'domcontentloaded',
-            timeout: 10000 
+            timeout: 20000 
         });
-        await delay(3000); // Increased delay to let images load
+        
+        try {
+            await page.waitForSelector('.film-list', { timeout: 10000 });
+            console.log('✅ Film list container found');
+        } catch (e) {
+            console.log('⚠️ Film list container not found, trying alternative selectors...');
+            const alternatives = ['.container', '.main-content', '.content', '#content'];
+            for (const selector of alternatives) {
+                try {
+                    await page.waitForSelector(selector, { timeout: 3000 });
+                    console.log(`✅ Found alternative container: ${selector}`);
+                    break;
+                } catch (err) {
+                    continue;
+                }
+            }
+        }
+        
+        await delay(3000); 
+        
+        console.log('📜 Scrolling to trigger lazy loading...');
+        await page.evaluate(() => {
+            window.scrollTo(0, document.body.scrollHeight);
+        });
+        await delay(2000);
+        
+        await page.evaluate(() => {
+            window.scrollTo(0, 0);
+        });
+        await delay(1000);
+        
+        console.log('🖼️ Waiting for images to load...');
+        await page.evaluate(() => {
+            return new Promise((resolve) => {
+                const images = document.querySelectorAll('img');
+                let loadedCount = 0;
+                const totalImages = images.length;
+                
+                console.log(`Found ${totalImages} images to load`);
+                
+                if (totalImages === 0) {
+                    resolve();
+                    return;
+                }
+                
+                const checkComplete = () => {
+                    loadedCount++;
+                    console.log(`Loaded ${loadedCount}/${totalImages} images`);
+                    if (loadedCount >= totalImages) {
+                        resolve();
+                    }
+                };
+                
+                images.forEach(img => {
+                    if (img.complete && img.naturalWidth > 0) {
+                        checkComplete();
+                    } else {
+                        img.addEventListener('load', checkComplete);
+                        img.addEventListener('error', checkComplete);
+                    }
+                });
+                
+                setTimeout(() => {
+                    console.log(`Image loading timeout reached, continuing with ${loadedCount}/${totalImages} loaded`);
+                    resolve();
+                }, 5000);
+            });
+        });
         
         console.log('🔍 Extracting anime list...');
         const animeList = await page.evaluate(() => {
             const filmList = document.querySelector('.film-list');
-            if (!filmList) return [];
+            if (!filmList) {
+                console.log('❌ .film-list not found, trying alternatives...');
+                const alternatives = document.querySelectorAll('.container .item, .main-content .item, .content .item');
+                if (alternatives.length === 0) {
+                    console.log('❌ No anime items found with alternative selectors');
+                    return [];
+                }
+                console.log(`✅ Found ${alternatives.length} items with alternative selectors`);
+            }
             
-            const items = filmList.querySelectorAll('.item');
+            const items = filmList ? filmList.querySelectorAll('.item') : document.querySelectorAll('.item');
             const animeData = [];
+            
+            console.log(`Found ${items.length} anime items`);
             
             items.forEach((item, index) => {
                 const inner = item.querySelector('.inner');
@@ -54,8 +128,8 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
                 const anchors = inner.querySelectorAll('a[href]');
                 
                 if (anchors.length >= 2) {
-                    const firstLink = anchors[0]; // Image link
-                    const secondLink = anchors[1]; // Title link
+                    const firstLink = anchors[0]; 
+                    const secondLink = anchors[1];
                     
                     const title = secondLink.getAttribute('data-jititle') || 
                                  secondLink.textContent.trim() || 
@@ -63,23 +137,42 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
                     
                     const redirectLink = secondLink.href;
                     
-                    // Enhanced image extraction from the HTML structure
                     let imageSrc = null;
                     
-                    // First, try to find the img element inside the first anchor
+                    console.log(`Processing item ${index + 1}: "${title}"`);
+                    
                     const imgElement = firstLink.querySelector('img');
                     
                     if (imgElement) {
-                        // Try different attributes in order of preference
-                        imageSrc = imgElement.getAttribute('src') || 
-                                  imgElement.getAttribute('data-src') || 
+                        console.log(`Found img element for "${title}"`);
+                        console.log(`Img src: ${imgElement.getAttribute('src')}`);
+                        console.log(`Img data-src: ${imgElement.getAttribute('data-src')}`);
+                        
+                        imageSrc = imgElement.getAttribute('data-src') || 
                                   imgElement.getAttribute('data-original') ||
+                                  imgElement.getAttribute('data-lazy') ||
+                                  imgElement.getAttribute('src') ||
                                   imgElement.src;
                         
-                        console.log(`Found image for ${title}: ${imageSrc}`);
+                        console.log(`Extracted image for "${title}": ${imageSrc}`);
+                    } else {
+                        console.log(`No img element found in first link for "${title}"`);
                     }
                     
-                    // If no img element, try background-image on the anchor or its children
+                    if (!imageSrc) {
+                        const allImgs = item.querySelectorAll('img');
+                        console.log(`Found ${allImgs.length} total img elements in item`);
+                        
+                        for (const img of allImgs) {
+                            const src = img.getAttribute('src') || img.getAttribute('data-src');
+                            if (src && (src.includes('/poster/') || src.includes('.jpg') || src.includes('.png'))) {
+                                imageSrc = src;
+                                console.log(`Found alternative image for "${title}": ${imageSrc}`);
+                                break;
+                            }
+                        }
+                    }
+                    
                     if (!imageSrc) {
                         const elementsWithBg = [firstLink, ...firstLink.querySelectorAll('*')];
                         for (const element of elementsWithBg) {
@@ -91,32 +184,43 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
                                 const match = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/);
                                 if (match) {
                                     imageSrc = match[1];
-                                    console.log(`Found background image for ${title}: ${imageSrc}`);
+                                    console.log(`Found background image for "${title}": ${imageSrc}`);
                                     break;
                                 }
                             }
                         }
                     }
                     
-                    // Fix relative URLs
+                    if (!imageSrc) {
+                        const dataAttrs = ['data-src', 'data-image', 'data-poster', 'data-thumb'];
+                        for (const attr of dataAttrs) {
+                            const value = firstLink.getAttribute(attr);
+                            if (value && (value.includes('.jpg') || value.includes('.png') || value.includes('.jpeg'))) {
+                                imageSrc = value;
+                                console.log(`Found data attribute image for "${title}": ${imageSrc}`);
+                                break;
+                            }
+                        }
+                    }
+                    
                     if (imageSrc && imageSrc.startsWith('/')) {
                         imageSrc = 'https://w1.123animes.ru' + imageSrc;
                     }
                     
-                    // Only filter out obvious placeholders, keep real poster paths
                     if (imageSrc && (
                         imageSrc.includes('no_poster.jpg') || 
                         imageSrc.includes('placeholder.') ||
                         imageSrc.includes('default.jpg') ||
                         imageSrc.includes('no-image.') ||
                         imageSrc.includes('loading.') ||
-                        imageSrc === 'about:blank'
+                        imageSrc.includes('lazy.') ||
+                        imageSrc === 'about:blank' ||
+                        imageSrc.length < 10
                     )) {
-                        console.log(`Filtered placeholder image: ${imageSrc}`);
+                        console.log(`Filtered placeholder image for "${title}": ${imageSrc}`);
                         imageSrc = null;
                     }
                     
-                    // Get episode count and audio type from status
                     const statusDiv = firstLink.querySelector('.status');
                     let episodes = null;
                     let audioType = null;
@@ -181,7 +285,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
     const page = await context.newPage();
     
     try {
-        // Allow scripts for iframe loading but block heavy resources
         await page.route('**/*', (route) => {
             const resourceType = route.request().resourceType();
             const url = route.request().url();
@@ -200,13 +303,11 @@ export const scrapeAnimeDetails = async (animeUrl) => {
         console.log(`🔍 Loading anime details from: ${animeUrl}`);
         await page.goto(animeUrl, { 
             waitUntil: 'domcontentloaded',
-            timeout: 10000
+            timeout: 15000 
         });
         await delay(1000);
         
-        // Extract anime title from the page
-        const animeTitle = await page.evaluate(() => {
-            // Try multiple selectors for anime title
+        const animeInfo = await page.evaluate(() => {
             const titleSelectors = [
                 '.entry-title',
                 '.anime-title',
@@ -216,22 +317,47 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                 '.post-title'
             ];
             
+            let title = null;
             for (const selector of titleSelectors) {
                 const element = document.querySelector(selector);
                 if (element && element.textContent.trim()) {
-                    return element.textContent.trim();
+                    title = element.textContent.trim();
+                    break;
                 }
             }
             
-            // Fallback: extract from URL
-            const urlParts = window.location.pathname.split('/');
-            const animeName = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
-            return animeName ? animeName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Unknown Anime';
+            if (!title) {
+                const urlParts = window.location.pathname.split('/');
+                const animeName = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+                title = animeName ? animeName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Unknown Anime';
+            }
+            
+            let posterImage = null;
+            const imageSelectors = [
+                '.thumb img',
+                '.poster img', 
+                '.anime-poster img',
+                '.detail-poster img',
+                'img[src*="poster"]',
+                'img[src*="cover"]'
+            ];
+            
+            for (const selector of imageSelectors) {
+                const img = document.querySelector(selector);
+                if (img && img.src && !img.src.includes('no_poster')) {
+                    posterImage = img.src;
+                    break;
+                }
+            }
+            
+            return { title, posterImage };
         });
         
-        console.log(`📺 Anime Title: ${animeTitle}`);
+        console.log(`📺 Anime Title: ${animeInfo.title}`);
+        if (animeInfo.posterImage) {
+            console.log(`🖼️ Found poster image: ${animeInfo.posterImage}`);
+        }
         
-        // Extract episode ranges
         const episodeRanges = await page.evaluate(() => {
             const ranges = [];
             const allRanges = document.querySelectorAll('.episodes.range');
@@ -274,7 +400,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                 }
             });
             
-            // Fallback if no ranges found
             if (ranges.length === 0) {
                 console.log('No ranges found, trying fallback...');
                 const fallbackLinks = document.querySelectorAll('.episodes a[href*="episode"], a[href*="episode"]');
@@ -318,7 +443,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
             return [];
         }
         
-        // Extract streaming links for ALL episodes
         const streamingLinks = [];
         
         console.log(`🎬 Extracting streaming links for ALL episodes...`);
@@ -326,7 +450,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
         for (const range of episodeRanges) {
             console.log(`  📂 Processing range ${range.range_index} (${range.episodes.length} episodes)`);
             
-            // Process ALL episodes - no limit
             for (const episode of range.episodes) {
                 try {
                     console.log(`    🔗 Episode ${episode.episode_number}...`);
@@ -335,12 +458,10 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                         waitUntil: 'domcontentloaded',
                         timeout: 8000
                     });
-                    await delay(2000); // Wait for iframe to load
+                    await delay(2000);
                     
-                    // Enhanced iframe detection
                     let streamingLink = null;
                     
-                    // First attempt
                     streamingLink = await page.evaluate(() => {
                         const selectors = [
                             '#iframe_ext82377 iframe',
@@ -361,7 +482,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                             }
                         }
                         
-                        // Fallback
                         const iframes = document.querySelectorAll('iframe');
                         for (let iframe of iframes) {
                             if (iframe.src && 
@@ -377,7 +497,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                         return null;
                     });
                     
-                    // Second attempt if needed
                     if (!streamingLink) {
                         await delay(3000);
                         streamingLink = await page.evaluate(() => {
@@ -398,10 +517,11 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                     
                     if (streamingLink) {
                         streamingLinks.push({
-                            title: animeTitle,
+                            title: animeInfo.title,
                             episode_number: episode.episode_number,
                             episode_url: episode.episode_url,
-                            streaming_link: streamingLink
+                            streaming_link: streamingLink,
+                            image: animeInfo.posterImage 
                         });
                         console.log(`      ✅ Found streaming link`);
                     } else {
