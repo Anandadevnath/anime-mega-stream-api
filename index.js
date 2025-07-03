@@ -1,8 +1,5 @@
 import express from 'express';
-import { AnimeAZ } from './animeAZlists.js';
-import { Aniscrape } from './anime.js';
-import { test } from './test.js';
-import { scrapeFilmList } from './filmListScraper.js';
+import { scrapeFilmList, scrapeAnimeDetails } from './filmListScraper.js';
 
 const app = express();
 app.use(express.json());
@@ -15,30 +12,66 @@ app.use((req, res, next) => {
     next();
 });
 
-// http://localhost:5000/scrape-film-list?url=https://w1.123animes.ru/az-all-anime/all/&page=1
-app.get('/scrape-film-list', async (req, res) => {
+// http://localhost:5000/anime-list?page=1
+app.get('/anime-list', async (req, res) => {
     try {
-        const baseUrl = req.query.url || 'https://w1.123animes.ru/az-all-anime/all/';
-        const page = req.query.page ? `?page=${req.query.page}` : '';
-        const fullUrl = baseUrl + page;
+        const page = req.query.page || 1;
+        const baseUrl = `https://w1.123animes.ru/az-all-anime/all/?page=${page}`;
         
-        console.log(`🚀 Scraping film list with Playwright from: ${fullUrl}`);
-        console.log(`⚡ Using optimized resource blocking for faster scraping...`);
-        console.log(`🎯 Target: 5 anime with ALL episodes each`);
-
+        console.log(`🚀 Fetching anime list from page ${page}`);
+        console.log(`🔗 URL: ${baseUrl}`);
+        
         const startTime = Date.now();
-        const results = await scrapeFilmList(fullUrl);
+        const animeList = await scrapeFilmList(baseUrl);
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
-
-        console.log(`✅ Scraping completed in ${duration.toFixed(2)} seconds`);
-        console.log(`📊 Found ${results.length} total streaming links`);
-
-        // Return only the data array directly
-        res.json(results);
-
+        
+        console.log(`✅ Fetched ${animeList.length} anime in ${duration.toFixed(2)} seconds`);
+        
+        res.json(animeList);
+        
     } catch (error) {
-        console.error('❌ Playwright Scraping Error:', error.message);
+        console.error('❌ Error fetching anime list:', error.message);
+        res.status(500).json({ 
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// http://localhost:5000/anime-details?url=https://w1.123animes.ru/anime/kanpekisugite-kawaige-ga-nai-to-konyaku-haki-sareta-seijo-wa-ringoku-ni-urareru
+app.get('/anime-details', async (req, res) => {
+    try {
+        const animeUrl = req.query.url;
+        
+        if (!animeUrl) {
+            return res.status(400).json({ 
+                error: 'URL parameter is required',
+                example: 'http://localhost:5000/anime-details?url=https://w1.123animes.ru/anime/anime-name'
+            });
+        }
+        
+        if (!animeUrl.includes('w1.123animes.ru/anime/')) {
+            return res.status(400).json({ 
+                error: 'Invalid anime URL format',
+                expected: 'https://w1.123animes.ru/anime/anime-name'
+            });
+        }
+        
+        console.log(`🎬 Fetching anime details from: ${animeUrl}`);
+        
+        const startTime = Date.now();
+        const streamingLinks = await scrapeAnimeDetails(animeUrl);
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        console.log(`✅ Fetched anime details in ${duration.toFixed(2)} seconds`);
+        console.log(`📊 Found ${streamingLinks.length} streaming links`);
+        
+        res.json(streamingLinks);
+        
+    } catch (error) {
+        console.error('❌ Error fetching anime details:', error.message);
         res.status(500).json({ 
             error: error.message,
             timestamp: new Date().toISOString()
@@ -50,6 +83,5 @@ app.get('/scrape-film-list', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-    console.log(`🚀 Anime Scraper API running at http://localhost:${PORT}`)
-
+    console.log(`🚀 Anime Scraper API running at http://localhost:${PORT}`);;
 });
