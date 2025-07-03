@@ -1,0 +1,291 @@
+import { chromium } from 'playwright';
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+export const scrapeSingleEpisode = async (episodeUrl) => {
+    const browser = await chromium.launch({ 
+        headless: true,
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding'
+        ]
+    });
+    
+    const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+    
+    const page = await context.newPage();
+    
+    try {
+        await page.route('**/*', (route) => {
+            const resourceType = route.request().resourceType();
+            const url = route.request().url();
+            
+            if (['image', 'font', 'media', 'websocket', 'manifest'].includes(resourceType) ||
+                url.includes('.jpg') ||
+                url.includes('.png') ||
+                url.includes('.gif') ||
+                url.includes('.webp') ||
+                url.includes('.mp4') ||
+                url.includes('.mp3') ||
+                url.includes('google-analytics') ||
+                url.includes('googletagmanager') ||
+                url.includes('facebook.com') ||
+                url.includes('twitter.com') ||
+                url.includes('dtscout.com') ||
+                url.includes('ads') ||
+                url.includes('doubleclick') ||
+                url.includes('adsystem') ||
+                url.includes('googlesyndication')) {
+                route.abort();
+            } else {
+                route.continue();
+            }
+        });
+        
+        console.log(`🔍 Loading episode: ${episodeUrl}`);
+        
+        await page.goto(episodeUrl, { 
+            waitUntil: 'domcontentloaded',
+            timeout: 15000 
+        });
+        
+        await delay(3000);
+        
+        let streamingLink = null;
+        let attempts = 0;
+        const maxAttempts = 4; 
+        
+        while (!streamingLink && attempts < maxAttempts) {
+            attempts++;
+            console.log(`🔍 Attempt ${attempts}/${maxAttempts} to find iframe...`);
+            
+            streamingLink = await page.evaluate(() => {
+                const findValidIframeSource = () => {
+                    const blockedDomains = [
+                        'dtscout.com',
+                        'google.com',
+                        'googletagmanager.com',
+                        'doubleclick.net',
+                        'googlesyndication.com',
+                        'googleadservices.com',
+                        'adsystem.com',
+                        'recaptcha',
+                        'facebook.com',
+                        'twitter.com',
+                        'instagram.com',
+                        'tiktok.com',
+                        'ads',
+                        'ad-',
+                        'analytics',
+                        'tracking',
+                        'metric',
+                        'about:blank'
+                    ];
+                    
+                    const validStreamingPatterns = [
+                        'bunnycdn',
+                        'embed',
+                        'play',
+                        'stream',
+                        'video',
+                        'player',
+                        'vidsrc',
+                        'vidplay',
+                        'filemoon',
+                        'doodstream',
+                        'streamtape',
+                        'mp4upload',
+                        'mixdrop',
+                        'upstream',
+                        'streamwish',
+                        'vid',
+                        'watch'
+                    ];
+                    
+                    const isValidStreamingLink = (src) => {
+                        if (!src || src === 'about:blank' || !src.startsWith('http') || src.length < 25) {
+                            return false;
+                        }
+                        
+                        const isBlocked = blockedDomains.some(domain => 
+                            src.toLowerCase().includes(domain.toLowerCase())
+                        );
+                        
+                        if (isBlocked) {
+                            return false;
+                        }
+                        
+                        const isValidStreaming = validStreamingPatterns.some(pattern => 
+                            src.toLowerCase().includes(pattern.toLowerCase())
+                        );
+                        
+                        return isValidStreaming;
+                    };
+                    
+                    const prioritySelectors = [
+                        '#iframe_ext82377 iframe',
+                        'iframe[src*="bunnycdn"]',
+                        'iframe[src*="embed"]',
+                        'iframe[src*="play"]',
+                        'iframe[src*="stream"]',
+                        'iframe[src*="video"]',
+                        'iframe[src*="player"]',
+                        'iframe[src*="vid"]'
+                    ];
+                    
+                    for (const selector of prioritySelectors) {
+                        const iframe = document.querySelector(selector);
+                        if (iframe && iframe.src && isValidStreamingLink(iframe.src)) {
+                            console.log(`Found valid iframe with priority selector: ${selector}`);
+                            return iframe.src;
+                        }
+                    }
+                    
+                    const iframes = document.querySelectorAll('iframe');
+                    console.log(`Scanning ${iframes.length} total iframes`);
+                    
+                    for (const iframe of iframes) {
+                        const src = iframe.src || 
+                                  iframe.getAttribute('src') || 
+                                  iframe.getAttribute('data-src') ||
+                                  iframe.getAttribute('data-lazy') ||
+                                  iframe.getAttribute('data-original');
+                        
+                        if (src) {
+                            console.log(`Checking iframe: ${src.substring(0, 60)}...`);
+                            
+                            if (isValidStreamingLink(src)) {
+                                console.log(`✅ Valid streaming iframe found: ${src.substring(0, 60)}...`);
+                                return src;
+                            } else {
+                                console.log(`❌ Blocked/invalid iframe: ${src.substring(0, 60)}...`);
+                            }
+                        }
+                    }
+                    
+                    return null;
+                };
+                
+                return findValidIframeSource();
+            });
+            
+            if (!streamingLink && attempts < maxAttempts) {
+                await page.evaluate(() => {
+                    const buttons = document.querySelectorAll('button, .play-btn, .load-btn, [onclick], .btn');
+                    for (const btn of buttons) {
+                        const text = btn.textContent?.toLowerCase() || '';
+                        if (text.includes('play') || text.includes('load') || text.includes('watch')) {
+                            try {
+                                btn.click();
+                                console.log(`Clicked button: ${text.substring(0, 20)}`);
+                                break;
+                            } catch (e) {
+                            }
+                        }
+                    }
+                });
+                
+                await delay(3000 + (attempts * 1000));
+            }
+        }
+        
+        if (streamingLink) {
+            console.log(`✅ Found valid streaming link: ${streamingLink.substring(0, 60)}...`);
+            
+            const episodePatterns = [
+                /episode[\/\-]?(\d+)/i,
+                /ep[\/\-]?(\d+)/i,
+                /\/(\d+)\/?$/,
+                /\-(\d+)\/?$/
+            ];
+            
+            let episodeNumber = 'Unknown';
+            for (const pattern of episodePatterns) {
+                const match = episodeUrl.match(pattern);
+                if (match) {
+                    episodeNumber = match[1];
+                    break;
+                }
+            }
+            
+            let animeTitle = 'Unknown Anime';
+            const urlParts = episodeUrl.split('/');
+            const animeIndex = urlParts.findIndex(part => part === 'anime');
+            
+            if (animeIndex !== -1 && urlParts[animeIndex + 1]) {
+                animeTitle = urlParts[animeIndex + 1]
+                    .replace(/-/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+            }
+            
+            return {
+                success: true,
+                data: {
+                    title: animeTitle,
+                    episode_number: episodeNumber,
+                    episode_url: episodeUrl,
+                    streaming_link: streamingLink,
+                },
+                extraction_time_seconds: parseFloat(((Date.now() - startTime) / 1000).toFixed(3))
+            };
+        } else {
+            console.log(`❌ No valid streaming link found for episode after ${maxAttempts} attempts`);
+            
+            const debugInfo = await page.evaluate(() => {
+                const iframes = document.querySelectorAll('iframe');
+                const found = [];
+                
+                for (const iframe of iframes) {
+                    const src = iframe.src || 
+                              iframe.getAttribute('src') || 
+                              iframe.getAttribute('data-src') ||
+                              iframe.getAttribute('data-lazy');
+                    if (src) {
+                        found.push({
+                            src: src.substring(0, 100),
+                            id: iframe.id || 'no-id',
+                            class: iframe.className || 'no-class'
+                        });
+                    }
+                }
+                
+                return {
+                    totalIframes: iframes.length,
+                    iframeSources: found,
+                    pageTitle: document.title,
+                    hasPlayButtons: document.querySelectorAll('button, .play-btn, .load-btn').length
+                };
+            });
+            
+            console.log(`Debug info:`, debugInfo);
+            
+            return {
+                success: false,
+                error: 'No valid streaming iframe found after multiple attempts',
+                episode_url: episodeUrl,
+                debug: debugInfo,
+                extraction_time_seconds: parseFloat(((Date.now() - startTime) / 1000).toFixed(3))
+            };
+        }
+        
+    } catch (error) {
+        console.error('❌ Error scraping single episode:', error.message);
+        return {
+            success: false,
+            error: error.message,
+            episode_url: episodeUrl,
+            extraction_time_seconds: parseFloat(((Date.now() - startTime) / 1000).toFixed(3))
+        };
+    } finally {
+        await browser.close();
+    }
+};
+
+// Add startTime tracking
+const startTime = Date.now();
