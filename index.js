@@ -41,26 +41,29 @@ app.get('/anime-list', async (req, res) => {
     }
 });
 
-// http://localhost:5000/anime-details?url=https://w1.123animes.ru/anime/your-forma
+
+// http://localhost:5000/anime-details?id=your-forma
 app.get('/anime-details', async (req, res) => {
     try {
-        const animeUrl = req.query.url;
+        const animeId = req.query.id;
         
-        if (!animeUrl) {
+        if (!animeId) {
             return res.status(400).json({ 
-                error: 'URL parameter is required',
-                example: 'http://localhost:5000/anime-details?url=https://w1.123animes.ru/anime/anime-name'
+                error: 'ID parameter is required',
+                example: 'http://localhost:5000/anime-details?id=your-forma'
             });
         }
         
-        if (!animeUrl.includes('w1.123animes.ru/anime/')) {
+        if (!/^[a-z0-9-]+$/.test(animeId)) {
             return res.status(400).json({ 
-                error: 'Invalid anime URL format',
-                expected: 'https://w1.123animes.ru/anime/anime-name'
+                error: 'Invalid anime ID format. Use lowercase letters, numbers, and hyphens only.',
+                example: 'http://localhost:5000/anime-details?id=your-forma'
             });
         }
         
-        console.log(`🎬 Fetching anime details from: ${animeUrl}`);
+        const animeUrl = `https://w1.123animes.ru/anime/${animeId}`;
+        
+        console.log(`🎬 Fetching anime details for: ${animeId}`);
         
         const startTime = Date.now();
         const streamingLinks = await scrapeAnimeDetails(animeUrl);
@@ -70,37 +73,50 @@ app.get('/anime-details', async (req, res) => {
         console.log(`✅ Fetched anime details in ${duration.toFixed(2)} seconds`);
         console.log(`📊 Found ${streamingLinks.length} streaming links`);
         
-        res.json(streamingLinks);
+        res.json({
+            success: true,
+            anime_id: animeId,
+            episodes: streamingLinks,
+            total_episodes: streamingLinks.length,
+            extraction_time_seconds: duration
+        });
         
     } catch (error) {
         console.error('❌ Error fetching anime details:', error.message);
         res.status(500).json({ 
+            success: false,
             error: error.message,
             timestamp: new Date().toISOString()
         });
     }
 });
 
-// http://localhost:5000/episode-stream?url=https://w1.123animes.ru/anime/sentai-daishikkaku-2nd-season-dub/episode/1
+
+// http://localhost:5000/episode-stream?id=sentai-daishikkaku-2nd-season-dub&ep=1
 app.get('/episode-stream', async (req, res) => {
     try {
-        const episodeUrl = req.query.url;
+        const animeId = req.query.id;
+        const episodeNumber = req.query.ep;
         
-        if (!episodeUrl) {
+        if (!animeId || !episodeNumber) {
             return res.status(400).json({ 
-                error: 'URL parameter is required',
-                example: 'http://localhost:5000/episode-stream?url=https://w1.123animes.ru/anime/anime-name/episode/1'
+                error: 'Both id and ep parameters are required',
+                example: 'http://localhost:5000/episode-stream?id=sentai-daishikkaku-2nd-season-dub&ep=1'
             });
         }
         
-        if (!episodeUrl.includes('w1.123animes.ru/anime/') || !episodeUrl.includes('episode')) {
+        // Validate episode number is numeric
+        if (isNaN(episodeNumber) || episodeNumber < 1) {
             return res.status(400).json({ 
-                error: 'Invalid episode URL format',
-                expected: 'https://w1.123animes.ru/anime/anime-name/episode/1'
+                error: 'Episode number must be a positive integer',
+                example: 'http://localhost:5000/episode-stream?id=anime-name&ep=1'
             });
         }
         
-        console.log(`🎯 Fetching streaming link for episode: ${episodeUrl}`);
+        // Construct the internal URL
+        const episodeUrl = `https://w1.123animes.ru/anime/${animeId}/episode/${episodeNumber}`;
+        
+        console.log(`🎯 Fetching streaming link for: ${animeId} Episode ${episodeNumber}`);
         
         const startTime = Date.now();
         const result = await scrapeSingleEpisode(episodeUrl);
@@ -111,6 +127,8 @@ app.get('/episode-stream', async (req, res) => {
             console.log(`✅ Found streaming link in ${duration.toFixed(2)} seconds`);
             res.json({
                 success: true,
+                anime_id: animeId,
+                episode: episodeNumber,
                 data: result.data,
                 extraction_time_seconds: duration
             });
@@ -119,7 +137,8 @@ app.get('/episode-stream', async (req, res) => {
             res.status(404).json({
                 success: false,
                 error: result.error,
-                episode_url: episodeUrl,
+                anime_id: animeId,
+                episode: episodeNumber,
                 extraction_time_seconds: duration
             });
         }
