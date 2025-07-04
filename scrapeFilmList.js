@@ -295,7 +295,8 @@ const extractDetailedMetadata = async (animeList, context) => {
                     genres: null,
                     country: null,
                     status: null,
-                    released: null
+                    released: null,
+                    description: null
                 };
             }
         })
@@ -307,6 +308,7 @@ const extractDetailedMetadata = async (animeList, context) => {
     
     console.log(`✅ Completed processing all ${animeList.length} anime`);
     console.log(`📊 Successfully extracted metadata for ${detailedAnimeList.filter(a => a.type || a.genres).length}/${animeList.length} anime`);
+    console.log(`📝 Successfully extracted descriptions for ${detailedAnimeList.filter(a => a.description).length}/${animeList.length} anime`);
     
     return detailedAnimeList;
 };
@@ -347,8 +349,231 @@ const extractAnimeMetadata = async (anime, context) => {
                     genres: null,
                     country: null,
                     status: null,
-                    released: null
+                    released: null,
+                    description: null
                 };
+                
+                console.log('📝 Searching for anime description...');
+                
+                const isValidDescription = (text) => {
+                    if (!text || text.length < 50) return false;
+                    if (text.length > 1500) return false;
+                    
+                    const lowerText = text.toLowerCase();
+                    
+                    const excludedPhrases = [
+                        'you can also use the keyboard shortcuts',
+                        'keyboard shortcuts to control',
+                        'control the player',
+                        'one way or another, keep comments',
+                        'comments related to the anime',
+                        'about 123animes in general',
+                        'streaming', 'watch online', 'click here',
+                        'download', 'loading', 'error', 'advertisement',
+                        'disable adblock', 'ad block', 'popup', 'redirect',
+                        'mirror', 'server', 'quality', 'resolution',
+                        'less', 'more', 'show more', 'show less',
+                        'morelink', 'cursor:pointer'
+                    ];
+                    
+                    for (const phrase of excludedPhrases) {
+                        if (lowerText.includes(phrase)) {
+                            console.log(`❌ Excluded description containing: "${phrase}"`);
+                            return false;
+                        }
+                    }
+                    
+                    const storyKeywords = [
+                        'story', 'character', 'world', 'adventure', 'journey',
+                        'protagonist', 'hero', 'villain', 'power', 'magic',
+                        'school', 'student', 'friend', 'battle', 'fight',
+                        'love', 'romance', 'family', 'life', 'death',
+                        'mystery', 'secret', 'truth', 'past', 'future',
+                        'anime', 'manga', 'series', 'follows', 'plot',
+                        'young', 'boy', 'girl', 'man', 'woman', 'dreams',
+                        'goals', 'challenges', 'overcome', 'discovers',
+                        'name', 'known', 'being', 'becomes', 'encounter',
+                        'handsome', 'beautiful', 'popular', 'student',
+                        'despite', 'would', 'suggest', 'resemblance',
+                        'bears', 'flower', 'eyes', 'small', 'limbs',
+                        'slender', 'cute', 'fairy-tale', 'daydreaming',
+                        'morning', 'tends', 'contact', 'classmate'
+                    ];
+                    
+                    const hasStoryKeywords = storyKeywords.some(keyword => 
+                        lowerText.includes(keyword)
+                    );
+                    
+                    if (!hasStoryKeywords) {
+                        console.log(`❌ Description doesn't contain story-related keywords`);
+                        return false;
+                    }
+                    
+                    return true;
+                };
+                
+                console.log('🔍 Looking for div.long...');
+                const longDiv = document.querySelector('div.long');
+                if (longDiv) {
+                    console.log('✅ Found div.long');
+                    const text = longDiv.textContent.trim();
+                    console.log(`Testing long div text: "${text.substring(0, 100)}..."`);
+                    
+                    if (isValidDescription(text)) {
+                        metadata.description = text;
+                        console.log(`✅ Found valid description in div.long: ${text.substring(0, 100)}...`);
+                    }
+                }
+                
+                if (!metadata.description) {
+                    console.log('🔍 Looking for div.short...');
+                    const shortDiv = document.querySelector('div.short');
+                    if (shortDiv) {
+                        console.log('✅ Found div.short');
+                        const text = shortDiv.textContent.trim();
+                        console.log(`Testing short div text: "${text.substring(0, 100)}..."`);
+                        
+                        if (isValidDescription(text)) {
+                            metadata.description = text;
+                            console.log(`✅ Found valid description in div.short: ${text.substring(0, 100)}...`);
+                        }
+                    }
+                }
+                
+                if (!metadata.description) {
+                    console.log('🔍 Looking for description containers...');
+                    const descriptionSelectors = [
+                        '.description',
+                        '.synopsis',
+                        '.plot',
+                        '.summary',
+                        '.story',
+                        '.anime-description',
+                        '.content-description',
+                        'div[class*="desc"]',
+                        'div[class*="syn"]',
+                        'p.description',
+                        'p.synopsis',
+                        '.dses',
+                        'p.dses'
+                    ];
+                    
+                    for (const selector of descriptionSelectors) {
+                        const elements = document.querySelectorAll(selector);
+                        console.log(`Found ${elements.length} elements with selector: ${selector}`);
+                        
+                        for (const element of elements) {
+                            const text = element.textContent.trim();
+                            console.log(`Testing description element text: "${text.substring(0, 100)}..."`);
+                            
+                            if (isValidDescription(text)) {
+                                metadata.description = text;
+                                console.log(`✅ Found valid description with selector "${selector}": ${text.substring(0, 100)}...`);
+                                break;
+                            }
+                        }
+                        
+                        if (metadata.description) break;
+                    }
+                }
+                
+                if (!metadata.description) {
+                    console.log('🔍 Looking in tooltipster elements...');
+                    const tooltipsterSelectors = [
+                        '[id*="tooltipster"] .tooltipster-content p.dses',
+                        '[id*="tooltipster"] .tooltipster-content .dses',
+                        '[id*="tooltipster"] p.dses',
+                        '[id*="tooltipster"] .dses',
+                        '.tooltipster-content p.dses',
+                        '.tooltipster-content .dses',
+                        '[class*="tooltipster"] p.dses',
+                        '[class*="tooltipster"] .dses',
+                        '[class*="tooltip"] p.dses',
+                        '[class*="tooltip"] .dses'
+                    ];
+                    
+                    for (const selector of tooltipsterSelectors) {
+                        const elements = document.querySelectorAll(selector);
+                        console.log(`Found ${elements.length} elements with tooltipster selector: ${selector}`);
+                        
+                        for (const element of elements) {
+                            const text = element.textContent.trim();
+                            console.log(`Testing tooltipster text: "${text.substring(0, 100)}..."`);
+                            
+                            if (isValidDescription(text)) {
+                                metadata.description = text;
+                                console.log(`✅ Found valid description in tooltipster: ${text.substring(0, 100)}...`);
+                                break;
+                            }
+                        }
+                        
+                        if (metadata.description) break;
+                    }
+                }
+
+                if (!metadata.description) {
+                    console.log('🔍 Looking in content areas...');
+                    const contentAreas = document.querySelectorAll('.content, .main-content, .post-content, .entry-content, .article-content, .info, .details');
+                    
+                    for (const area of contentAreas) {
+                        const paragraphs = area.querySelectorAll('p, div');
+                        
+                        for (const element of paragraphs) {
+                            const text = element.textContent.trim();
+                            
+                            if (element.closest('[class*="control"]') || 
+                                element.closest('[class*="player"]') || 
+                                element.closest('[class*="video"]') ||
+                                element.closest('[class*="nav"]') ||
+                                element.closest('[class*="menu"]') ||
+                                element.closest('[class*="button"]') ||
+                                element.closest('[class*="morelink"]')) {
+                                continue;
+                            }
+                            
+                            if (isValidDescription(text)) {
+                                metadata.description = text;
+                                console.log(`✅ Found valid description in content area: ${text.substring(0, 100)}...`);
+                                break;
+                            }
+                        }
+                        
+                        if (metadata.description) break;
+                    }
+                }
+                
+                if (!metadata.description) {
+                    console.log('🔍 Looking for any div with substantial text...');
+                    const allDivs = document.querySelectorAll('div');
+                    
+                    for (const div of allDivs) {
+                        if (div.children.length > 2) continue;
+                        
+                        const text = div.textContent.trim();
+                        
+                        if (text.length < 100) continue;
+                        
+                        if (div.closest('[class*="control"]') ||
+                            div.closest('[class*="player"]') ||
+                            div.closest('[class*="video"]') ||
+                            div.closest('[class*="nav"]') ||
+                            div.closest('[class*="menu"]') ||
+                            div.closest('[class*="button"]') ||
+                            div.closest('[class*="morelink"]')) {
+                            continue;
+                        }
+                        
+                        if (isValidDescription(text)) {
+                            metadata.description = text;
+                            console.log(`✅ Found valid description in generic div: ${text.substring(0, 100)}...`);
+                            break;
+                        }
+                    }
+                }
+                
+                if (!metadata.description) {
+                    console.log('❌ No valid description found in any strategy');
+                }
                 
                 const dtElements = document.querySelectorAll('dt');
                 dtElements.forEach(dt => {
@@ -471,6 +696,35 @@ const extractAnimeMetadata = async (anime, context) => {
                             .replace(/\n/g, ' ')
                             .replace(/\s+/g, ' ')
                             .trim();
+                        
+                        if (key === 'description') {
+                            const cleanupPatterns = [
+                                /you can also use the keyboard shortcuts.*/gi,
+                                /keyboard shortcuts to control.*/gi,
+                                /control the player.*/gi,
+                                /one way or another, keep comments.*/gi,
+                                /comments related to the anime.*/gi,
+                                /about 123animes in general.*/gi,
+                                /\[written by.*?\]/gi,
+                                /\(written by.*?\)/gi,
+                                /less$/gi,
+                                /more$/gi,
+                                /show more$/gi,
+                                /show less$/gi
+                            ];
+                            
+                            for (const pattern of cleanupPatterns) {
+                                metadata[key] = metadata[key].replace(pattern, '').trim();
+                            }
+                            
+                            if (metadata[key].length < 50) {
+                                console.log(`❌ Description too short after cleanup: "${metadata[key]}"`);
+                                metadata[key] = null;
+                            } else if (metadata[key].length > 1200) {
+                                metadata[key] = metadata[key].substring(0, 1200) + '...';
+                                console.log(`✂️ Truncated description to 1200 characters`);
+                            }
+                        }
                     }
                 });
                 
