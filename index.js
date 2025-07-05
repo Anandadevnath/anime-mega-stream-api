@@ -14,6 +14,24 @@ app.use((req, res, next) => {
     next();
 });
 
+// Root route for health check
+app.get('/', (req, res) => {
+    res.json({
+        message: "🎬 Anime Scraper API is running!",
+        status: "active",
+        version: "1.0.0",
+        endpoints: {
+            "anime_list": "/anime-list?page=1",
+            "hianime_top10": "/hianime-top10",
+            "anime_details": "/anime-details?id=your-forma",
+            "episode_stream": "/episode-stream?id=anime-name&ep=1"
+        },
+        timestamp: new Date().toISOString(),
+        deployed_on: "Render"
+    });
+});
+
+
 // http://localhost:5000/anime-list?page=1
 app.get('/anime-list', async (req, res) => {
     try {
