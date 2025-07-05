@@ -1,10 +1,10 @@
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 import pLimit from 'p-limit';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const scrapeAnimeDetails = async (animeUrl) => {
-    const browser = await chromium.launch({ 
+    const browser = await puppeteer.launch({ 
         headless: true,
         args: [
             '--no-sandbox', 
@@ -14,19 +14,18 @@ export const scrapeAnimeDetails = async (animeUrl) => {
         ]
     });
     
-    const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-    
     const maxConcurrency = 8; 
     const pagePool = [];
     
     for (let i = 0; i < maxConcurrency; i++) {
-        const page = await context.newPage();
+        const page = await browser.newPage();
         
-        await page.route('**/*', (route) => {
-            const resourceType = route.request().resourceType();
-            const url = route.request().url();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            const resourceType = req.resourceType();
+            const url = req.url();
             
             if (['image', 'font', 'media', 'websocket', 'manifest'].includes(resourceType) ||
                 url.includes('.jpg') ||
@@ -49,9 +48,9 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                 url.includes('tracking') ||
                 url.includes('doubleclick') ||
                 url.includes('googlesyndication')) {
-                route.abort();
+                req.abort();
             } else {
-                route.continue();
+                req.continue();
             }
         });
         

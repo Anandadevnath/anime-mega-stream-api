@@ -1,9 +1,9 @@
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const scrapeSingleEpisode = async (episodeUrl) => {
-    const browser = await chromium.launch({ 
+    const browser = await puppeteer.launch({ 
         headless: true,
         args: [
             '--no-sandbox', 
@@ -15,16 +15,15 @@ export const scrapeSingleEpisode = async (episodeUrl) => {
         ]
     });
     
-    const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
+    const page = await browser.newPage();
     
-    const page = await context.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     try {
-        await page.route('**/*', (route) => {
-            const resourceType = route.request().resourceType();
-            const url = route.request().url();
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            const resourceType = req.resourceType();
+            const url = req.url();
             
             if (['image', 'font', 'media', 'websocket', 'manifest'].includes(resourceType) ||
                 url.includes('.jpg') ||
@@ -42,13 +41,15 @@ export const scrapeSingleEpisode = async (episodeUrl) => {
                 url.includes('doubleclick') ||
                 url.includes('adsystem') ||
                 url.includes('googlesyndication')) {
-                route.abort();
+                req.abort();
             } else {
-                route.continue();
+                req.continue();
             }
         });
         
         console.log(`🔍 Loading episode: ${episodeUrl}`);
+        
+        const startTime = Date.now();
         
         await page.goto(episodeUrl, { 
             waitUntil: 'domcontentloaded',
@@ -286,6 +287,3 @@ export const scrapeSingleEpisode = async (episodeUrl) => {
         await browser.close();
     }
 };
-
-// Add startTime tracking
-const startTime = Date.now();

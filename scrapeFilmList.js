@@ -1,10 +1,10 @@
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 import pLimit from 'p-limit';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-anime/all/') => {
-    const browser = await chromium.launch({ 
+    const browser = await puppeteer.launch({ 
         headless: true,
         args: [
             '--no-sandbox', 
@@ -12,21 +12,20 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
         ]
     });
     
-    const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
+    const page = await browser.newPage();
     
-    const page = await context.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     try {
-        await page.route('**/*', (route) => {
-            const resourceType = route.request().resourceType();
-            const url = route.request().url();
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            const resourceType = req.resourceType();
+            const url = req.url();
             
             if (['stylesheet', 'font', 'media'].includes(resourceType)) {
-                route.abort();
+                req.abort();
             } else {
-                route.continue();
+                req.continue();
             }
         });
         
@@ -261,7 +260,7 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
         console.log(`🖼️ Found ${animeList.filter(a => a.image).length} anime with poster images`);
         
         console.log('📊 Extracting detailed metadata for each anime with 10 concurrent workers...');
-        const detailedAnimeList = await extractDetailedMetadata(animeList, context);
+        const detailedAnimeList = await extractDetailedMetadata(animeList, browser);
         
         return detailedAnimeList;
         
@@ -273,7 +272,7 @@ export const scrapeFilmList = async (baseUrl = 'https://w1.123animes.ru/az-all-a
     }
 };
 
-const extractDetailedMetadata = async (animeList, context) => {
+const extractDetailedMetadata = async (animeList, browser) => {
     const detailedAnimeList = [];
     const limit = pLimit(10); 
     
@@ -284,7 +283,7 @@ const extractDetailedMetadata = async (animeList, context) => {
             console.log(`🔗 Processing anime ${index + 1}/${animeList.length}: ${anime.title}`);
             
             try {
-                const result = await extractAnimeMetadata(anime, context);
+                const result = await extractAnimeMetadata(anime, browser);
                 console.log(`    ✅ Completed anime ${index + 1}/${animeList.length}: ${anime.title}`);
                 return result;
             } catch (error) {
@@ -313,13 +312,14 @@ const extractDetailedMetadata = async (animeList, context) => {
     return detailedAnimeList;
 };
 
-const extractAnimeMetadata = async (anime, context) => {
-    const page = await context.newPage();
+const extractAnimeMetadata = async (anime, browser) => {
+    const page = await browser.newPage();
     
     try {
-        await page.route('**/*', (route) => {
-            const resourceType = route.request().resourceType();
-            const url = route.request().url();
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            const resourceType = req.resourceType();
+            const url = req.url();
             
             if (['image', 'stylesheet', 'font', 'media', 'websocket', 'manifest'].includes(resourceType) ||
                 url.includes('google-analytics') ||
@@ -329,9 +329,9 @@ const extractAnimeMetadata = async (anime, context) => {
                 url.includes('ads') ||
                 url.includes('analytics') ||
                 url.includes('tracking')) {
-                route.abort();
+                req.abort();
             } else {
-                route.continue();
+                req.continue();
             }
         });
         
