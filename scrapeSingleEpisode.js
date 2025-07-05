@@ -5,14 +5,14 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 export const scrapeSingleEpisode = async (episodeUrl) => {
     const browser = await puppeteer.launch({ 
         headless: true,
-        args: [
-            '--no-sandbox', 
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding'
-        ]
+     args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-gpu',
+        '--no-first-run'
+    ]
     });
     
     const page = await browser.newPage();

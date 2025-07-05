@@ -15,7 +15,8 @@
     "puppeteer": "^24.10.1",
     "p-limit": "^6.2.0",
     "cheerio": "^1.1.0",
-    "axios": "^1.9.0"
+    "axios": "^1.9.0",
+    "dotenv": "^16.3.1"
   },
   "engines": {
     "node": ">=18.0.0"
