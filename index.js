@@ -12,8 +12,6 @@ import {
 } from './database/services/animeService.js';
 
 dotenv.config();
-
-// Connect to MongoDB
 connectDB();
 
 const app = express();
