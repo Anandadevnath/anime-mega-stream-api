@@ -9,16 +9,26 @@
     "dev": "node index.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "puppeteer": "^24.10.1",
-    "p-limit": "^6.2.0",
+    "axios": "^1.9.0",
     "cheerio": "^1.1.0",
-    "axios": "^1.9.0"
+    "dotenv": "^17.0.1",
+    "express": "^5.1.0",
+    "mongodb": "^6.17.0",
+    "mongoose": "^8.16.1",
+    "p-limit": "^6.2.0",
+    "puppeteer": "^24.10.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["anime", "scraping", "streaming", "api"],
+  "keywords": [
+    "anime",
+    "scraping",
+    "streaming",
+    "api"
+  ],
   "author": "",
   "license": "ISC"
 }

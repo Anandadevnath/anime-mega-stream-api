@@ -2,6 +2,10 @@ import express from 'express';
 import { scrapeFilmList } from './scrapeFilmList.js';
 import { scrapeAnimeDetails } from './scrapeAnimeDetails.js';
 import { scrapeSingleEpisode } from './scrapeSingleEpisode.js';
+import { scrapeHiAnimeTop10 } from './scrapeHiAnimeTop10.js';
+import { scrapeHiAnimeWeeklyTop10 } from './scrapeHiAnimeWeeklyTop10.js';
+import { scrapeHiAnimeMonthlyTop10 } from './scrapeHiAnimeMonthlyTop10.js';
+
 
 const app = express();
 app.use(express.json());
@@ -12,6 +16,105 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     next();
+});
+
+// root
+app.get('/', async (req, res) => {
+    res.json({
+        message: "🎬 Anime Scraper API is running!",
+    });
+});
+
+// http://localhost:5000/hianime-top10
+app.get('/hianime-top10', async (req, res) => {
+    try {
+        console.log('🔥 Fetching HiAnime top 10 trending anime...');
+        
+        const startTime = Date.now();
+        const top10Anime = await scrapeHiAnimeTop10();
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        console.log(`✅ Fetched ${top10Anime.length} trending anime in ${duration.toFixed(2)} seconds`);
+        
+        res.json({
+            success: true,
+            source: "HiAnime.to",
+            total_anime: top10Anime.length,
+            extraction_time_seconds: duration,
+            data: top10Anime
+        });
+        
+    } catch (error) {
+        console.error('❌ Error fetching HiAnime top 10:', error.message);
+        res.status(500).json({ 
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// http://localhost:5000/hianime-weekly-top10
+app.get('/hianime-weekly-top10', async (req, res) => {
+    try {
+        console.log('📅 Fetching HiAnime weekly top 10 anime...');
+        
+        const startTime = Date.now();
+        const weeklyTop10Anime = await scrapeHiAnimeWeeklyTop10();
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        console.log(`✅ Fetched ${weeklyTop10Anime.length} weekly anime in ${duration.toFixed(2)} seconds`);
+        
+        res.json({
+            success: true,
+            source: "HiAnime.to",
+            type: "weekly",
+            total_anime: weeklyTop10Anime.length,
+            extraction_time_seconds: duration,
+            data: weeklyTop10Anime
+        });
+        
+    } catch (error) {
+        console.error('❌ Error fetching HiAnime weekly top 10:', error.message);
+        res.status(500).json({ 
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// http://localhost:5000/hianime-monthly-top10
+app.get('/hianime-monthly-top10', async (req, res) => {
+    try {
+        console.log('📅 Fetching HiAnime monthly top 10 anime...');
+        
+        const startTime = Date.now();
+        const monthlyTop10Anime = await scrapeHiAnimeMonthlyTop10();
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        
+        console.log(`✅ Fetched ${monthlyTop10Anime.length} monthly anime in ${duration.toFixed(2)} seconds`);
+        
+        res.json({
+            success: true,
+            source: "HiAnime.to",
+            type: "monthly",
+            total_anime: monthlyTop10Anime.length,
+            extraction_time_seconds: duration,
+            data: monthlyTop10Anime
+        });
+        
+    } catch (error) {
+        console.error('❌ Error fetching HiAnime monthly top 10:', error.message);
+        res.status(500).json({ 
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 // http://localhost:5000/anime-list?page=1
@@ -40,7 +143,6 @@ app.get('/anime-list', async (req, res) => {
         });
     }
 });
-
 
 // http://localhost:5000/anime-details?id=your-forma
 app.get('/anime-details', async (req, res) => {
@@ -91,7 +193,6 @@ app.get('/anime-details', async (req, res) => {
     }
 });
 
-
 // http://localhost:5000/episode-stream?id=sentai-daishikkaku-2nd-season-dub&ep=1
 app.get('/episode-stream', async (req, res) => {
     try {
@@ -113,7 +214,6 @@ app.get('/episode-stream', async (req, res) => {
             });
         }
         
-        // Construct the internal URL
         const episodeUrl = `https://w1.123animes.ru/anime/${animeId}/episode/${episodeNumber}`;
         
         console.log(`🎯 Fetching streaming link for: ${animeId} Episode ${episodeNumber}`);
@@ -152,9 +252,8 @@ app.get('/episode-stream', async (req, res) => {
     }
 });
 
-
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-    console.log(`🚀 Anime Scraper API running at http://localhost:${PORT}`);;
+    console.log(`🚀 Anime Scraper API running at http://localhost:${PORT}`);
 });
