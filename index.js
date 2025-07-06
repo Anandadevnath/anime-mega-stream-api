@@ -1,11 +1,20 @@
 import express from 'express';
+import dotenv from 'dotenv';
+import connectDB from './database/config.js';
 import { scrapeFilmList } from './scrapeFilmList.js';
 import { scrapeAnimeDetails } from './scrapeAnimeDetails.js';
 import { scrapeSingleEpisode } from './scrapeSingleEpisode.js';
 import { scrapeHiAnimeTop10 } from './scrapeHiAnimeTop10.js';
 import { scrapeHiAnimeWeeklyTop10 } from './scrapeHiAnimeWeeklyTop10.js';
 import { scrapeHiAnimeMonthlyTop10 } from './scrapeHiAnimeMonthlyTop10.js';
+import { 
+    saveBulkAnime, 
+} from './database/services/animeService.js';
 
+dotenv.config();
+
+// Connect to MongoDB
+connectDB();
 
 const app = express();
 app.use(express.json());
@@ -18,10 +27,11 @@ app.use((req, res, next) => {
     next();
 });
 
-// root
+// root endpoint with complete API documentation
 app.get('/', async (req, res) => {
     res.json({
         message: "🎬 Anime Scraper API is running!",
+        version: "2.1.0",
     });
 });
 
@@ -132,6 +142,20 @@ app.get('/anime-list', async (req, res) => {
         const duration = (endTime - startTime) / 1000;
         
         console.log(`✅ Fetched ${animeList.length} anime in ${duration.toFixed(2)} seconds`);
+        
+        // Save to MongoDB
+        try {
+            const animeData = animeList.map(anime => ({
+                ...anime,
+                category: 'general',
+                source: '123animes.ru',
+                ranking: null
+            }));
+            await saveBulkAnime(animeData);
+            console.log('💾 Successfully saved anime list to database');
+        } catch (dbError) {
+            console.error('❌ Error saving anime list to database:', dbError.message);
+        }
         
         res.json(animeList);
         
@@ -252,8 +276,10 @@ app.get('/episode-stream', async (req, res) => {
     }
 });
 
+
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-    console.log(`🚀 Anime Scraper API running at http://localhost:${PORT}`);
+    console.log(`🚀 Anime Scraper API v2.1 running at http://localhost:${PORT}`);
 });

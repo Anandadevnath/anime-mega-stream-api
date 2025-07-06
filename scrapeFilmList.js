@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import pLimit from 'p-limit';
+import { saveAnime } from './database/services/animeService.js';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -416,6 +417,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     return true;
                 };
 
+                // Strategy 1: Look for div.long
                 console.log('🔍 Looking for div.long...');
                 const longDiv = document.querySelector('div.long');
                 if (longDiv) {
@@ -429,6 +431,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     }
                 }
 
+                // Strategy 2: Look for div.short
                 if (!metadata.description) {
                     console.log('🔍 Looking for div.short...');
                     const shortDiv = document.querySelector('div.short');
@@ -444,6 +447,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     }
                 }
 
+                // Strategy 3: Look for common description containers
                 if (!metadata.description) {
                     console.log('🔍 Looking for description containers...');
                     const descriptionSelectors = [
@@ -481,6 +485,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     }
                 }
 
+                // Strategy 4: Look in tooltipster elements
                 if (!metadata.description) {
                     console.log('🔍 Looking in tooltipster elements...');
                     const tooltipsterSelectors = [
@@ -515,6 +520,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     }
                 }
 
+                // Strategy 5: Look in content areas
                 if (!metadata.description) {
                     console.log('🔍 Looking in content areas...');
                     const contentAreas = document.querySelectorAll('.content, .main-content, .post-content, .entry-content, .article-content, .info, .details');
@@ -525,6 +531,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                         for (const element of paragraphs) {
                             const text = element.textContent.trim();
 
+                            // Skip elements inside control/player areas
                             if (element.closest('[class*="control"]') ||
                                 element.closest('[class*="player"]') ||
                                 element.closest('[class*="video"]') ||
@@ -546,17 +553,21 @@ const extractAnimeMetadata = async (anime, browser) => {
                     }
                 }
 
+                // Strategy 6: Look for any div with substantial text
                 if (!metadata.description) {
                     console.log('🔍 Looking for any div with substantial text...');
                     const allDivs = document.querySelectorAll('div');
 
                     for (const div of allDivs) {
+                        // Skip complex divs with many children
                         if (div.children.length > 2) continue;
 
                         const text = div.textContent.trim();
 
+                        // Skip short text
                         if (text.length < 100) continue;
 
+                        // Skip control/player areas
                         if (div.closest('[class*="control"]') ||
                             div.closest('[class*="player"]') ||
                             div.closest('[class*="video"]') ||
@@ -579,6 +590,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     console.log('❌ No valid description found in any strategy');
                 }
 
+                // Extract other metadata from dt/dd elements
                 const dtElements = document.querySelectorAll('dt');
                 dtElements.forEach(dt => {
                     const dtText = dt.textContent.trim().toLowerCase();
@@ -634,6 +646,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     }
                 });
 
+                // Fallback: Try alternative selectors for metadata
                 if (!metadata.type || !metadata.genres || !metadata.country || !metadata.status || !metadata.released) {
                     const metaRows = document.querySelectorAll('.meta .col-sm-12');
 
@@ -646,7 +659,6 @@ const extractAnimeMetadata = async (anime, browser) => {
                                 metadata.type = typeLink.textContent.trim();
                             }
                         }
-
 
                         if (rowText.toLowerCase().includes('genre:') && !metadata.genres) {
                             const genreLinks = row.querySelectorAll('a[href*="/genere/"]');
@@ -694,6 +706,7 @@ const extractAnimeMetadata = async (anime, browser) => {
                     });
                 }
 
+                // Clean up metadata
                 Object.keys(metadata).forEach(key => {
                     if (metadata[key]) {
                         metadata[key] = metadata[key]
@@ -738,12 +751,44 @@ const extractAnimeMetadata = async (anime, browser) => {
             return extractMetadata();
         });
 
-        return {
+        const finalAnimeData = {
             ...anime,
-            ...metadata
+            ...metadata,
+            category: 'general',
+            source: '123animes'
         };
 
+        // 🚀 AUTO-SAVE TO DATABASE IMMEDIATELY AFTER PROCESSING
+        try {
+            await saveAnime(finalAnimeData);
+            console.log(`    💾 Saved to database: ${anime.title}`);
+        } catch (saveError) {
+            console.error(`    ❌ Failed to save to database: ${anime.title} - ${saveError.message}`);
+        }
+
+        return finalAnimeData;
+
     } catch (error) {
+        // Even if metadata extraction fails, save basic anime info
+        const basicAnimeData = {
+            ...anime,
+            type: null,
+            genres: null,
+            country: null,
+            status: null,
+            released: null,
+            description: null,
+            category: 'general',
+            source: '123animes'
+        };
+
+        try {
+            await saveAnime(basicAnimeData);
+            console.log(`    💾 Saved basic data to database: ${anime.title}`);
+        } catch (saveError) {
+            console.error(`    ❌ Failed to save basic data: ${anime.title} - ${saveError.message}`);
+        }
+
         throw new Error(`Failed to extract metadata: ${error.message}`);
     } finally {
         await page.close();

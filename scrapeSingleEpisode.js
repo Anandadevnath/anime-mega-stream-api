@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer';
+import { saveSingleStreamingLink } from './database/services/singleStreamingLinkService.js';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -25,11 +26,7 @@ export const scrapeSingleEpisode = async (episodeUrl) => {
             const resourceType = req.resourceType();
             const url = req.url();
             
-            if (['image', 'font', 'media', 'websocket', 'manifest'].includes(resourceType) ||
-                url.includes('.jpg') ||
-                url.includes('.png') ||
-                url.includes('.gif') ||
-                url.includes('.webp') ||
+            if (['font', 'media', 'websocket', 'manifest'].includes(resourceType) ||
                 url.includes('.mp4') ||
                 url.includes('.mp3') ||
                 url.includes('google-analytics') ||
@@ -57,6 +54,245 @@ export const scrapeSingleEpisode = async (episodeUrl) => {
         });
         
         await delay(3000);
+        
+        // 🖼️ Enhanced image extraction using proven logic from scrapeFilmList.js
+        console.log('🖼️ Waiting for images to load...');
+        await page.evaluate(() => {
+            return new Promise((resolve) => {
+                const images = document.querySelectorAll('img');
+                let loadedCount = 0;
+                const totalImages = images.length;
+
+                console.log(`Found ${totalImages} images to load`);
+
+                if (totalImages === 0) {
+                    resolve();
+                    return;
+                }
+
+                const checkComplete = () => {
+                    loadedCount++;
+                    if (loadedCount >= totalImages) {
+                        resolve();
+                    }
+                };
+
+                images.forEach(img => {
+                    if (img.complete && img.naturalWidth > 0) {
+                        checkComplete();
+                    } else {
+                        img.addEventListener('load', checkComplete);
+                        img.addEventListener('error', checkComplete);
+                    }
+                });
+
+                setTimeout(() => {
+                    console.log(`Image loading timeout reached, continuing with ${loadedCount}/${totalImages} loaded`);
+                    resolve();
+                }, 3000);
+            });
+        });
+
+        const animeImage = await page.evaluate(() => {
+            const findAnimeImage = () => {
+                console.log('🔍 Starting enhanced image extraction...');
+                
+                // Enhanced image selectors based on scrapeFilmList.js
+                const imageSelectors = [
+                    '.anime-poster img',
+                    '.poster img',
+                    '.anime-image img',
+                    '.anime-cover img',
+                    '.show-poster img',
+                    '.thumbnail img',
+                    '.anime-info img',
+                    '.series-poster img',
+                    '.film-poster img',
+                    '.movie-poster img',
+                    'img[alt*="poster"]',
+                    'img[alt*="cover"]',
+                    'img[class*="poster"]',
+                    'img[class*="cover"]',
+                    'img[src*="poster"]',
+                    'img[src*="cover"]',
+                    '.anime-details img',
+                    '.anime-meta img',
+                    '.series-info img',
+                    '.inner img', // Common in 123animes structure
+                    '.item img'   // Common in 123animes structure
+                ];
+                
+                // Strategy 1: Try specific selectors first
+                for (const selector of imageSelectors) {
+                    const img = document.querySelector(selector);
+                    if (img) {
+                        console.log(`Found img element with selector: ${selector}`);
+                        
+                        // Extract image source using multiple attributes
+                        let imageSrc = img.getAttribute('data-src') ||
+                                     img.getAttribute('data-original') ||
+                                     img.getAttribute('data-lazy') ||
+                                     img.getAttribute('src') ||
+                                     img.src;
+                        
+                        console.log(`Extracted image source: ${imageSrc}`);
+                        
+                        if (imageSrc && imageSrc.startsWith('http')) {
+                            // Check if it's not a placeholder/no_poster image
+                            if (!imageSrc.includes('no_poster.png') &&
+                                !imageSrc.includes('no_poster.jpg') &&
+                                !imageSrc.includes('placeholder.') &&
+                                !imageSrc.includes('default.jpg') &&
+                                !imageSrc.includes('no-image.') &&
+                                !imageSrc.includes('loading.') &&
+                                !imageSrc.includes('lazy.') &&
+                                imageSrc !== 'about:blank' &&
+                                imageSrc.length > 10) {
+                                
+                                console.log(`✅ Found valid anime image: ${imageSrc}`);
+                                return imageSrc;
+                            } else {
+                                console.log(`❌ Filtered placeholder image: ${imageSrc}`);
+                            }
+                        }
+                    }
+                }
+                
+                // Strategy 2: Look for all images and find the best one
+                console.log('🔍 Strategy 2: Scanning all images...');
+                const allImages = document.querySelectorAll('img');
+                console.log(`Found ${allImages.length} total images`);
+                
+                for (const img of allImages) {
+                    // Extract image source using multiple attributes
+                    let imageSrc = img.getAttribute('data-src') ||
+                                 img.getAttribute('data-original') ||
+                                 img.getAttribute('data-lazy') ||
+                                 img.getAttribute('src') ||
+                                 img.src;
+                    
+                    if (imageSrc) {
+                        console.log(`Checking image: ${imageSrc.substring(0, 80)}...`);
+                        
+                        // Make relative URLs absolute
+                        if (imageSrc.startsWith('/')) {
+                            imageSrc = 'https://w1.123animes.ru' + imageSrc;
+                        }
+                        
+                        // Check if it's a valid anime poster
+                        if (imageSrc.startsWith('http') && 
+                            (imageSrc.includes('/poster/') || 
+                             imageSrc.includes('.jpg') || 
+                             imageSrc.includes('.png') ||
+                             imageSrc.includes('.jpeg')) &&
+                            !imageSrc.includes('no_poster.png') &&
+                            !imageSrc.includes('no_poster.jpg') &&
+                            !imageSrc.includes('placeholder.') &&
+                            !imageSrc.includes('default.jpg') &&
+                            !imageSrc.includes('no-image.') &&
+                            !imageSrc.includes('loading.') &&
+                            !imageSrc.includes('lazy.') &&
+                            !imageSrc.includes('logo') &&
+                            !imageSrc.includes('icon') &&
+                            !imageSrc.includes('banner') &&
+                            !imageSrc.includes('ad') &&
+                            imageSrc !== 'about:blank' &&
+                            imageSrc.length > 10 &&
+                            img.width > 80 && 
+                            img.height > 80) {
+                            
+                            console.log(`✅ Found valid fallback image: ${imageSrc}`);
+                            return imageSrc;
+                        }
+                    }
+                }
+                
+                // Strategy 3: Look for background images
+                console.log('🔍 Strategy 3: Scanning background images...');
+                const elementsWithPotentialBg = document.querySelectorAll('div, span, a, section');
+                for (const element of elementsWithPotentialBg) {
+                    const style = element.getAttribute('style') || '';
+                    const computedStyle = window.getComputedStyle(element);
+                    const bgImage = computedStyle.backgroundImage || style;
+
+                    if (bgImage && bgImage.includes('url(')) {
+                        const match = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/);
+                        if (match) {
+                            let imageSrc = match[1];
+                            console.log(`Found background image: ${imageSrc}`);
+                            
+                            // Make relative URLs absolute
+                            if (imageSrc.startsWith('/')) {
+                                imageSrc = 'https://w1.123animes.ru' + imageSrc;
+                            }
+                            
+                            // Check if it's a valid anime poster
+                            if (imageSrc.startsWith('http') && 
+                                !imageSrc.includes('no_poster.png') &&
+                                !imageSrc.includes('no_poster.jpg') &&
+                                !imageSrc.includes('placeholder.') &&
+                                !imageSrc.includes('default.jpg') &&
+                                !imageSrc.includes('no-image.') &&
+                                !imageSrc.includes('loading.') &&
+                                !imageSrc.includes('lazy.') &&
+                                !imageSrc.includes('logo') &&
+                                !imageSrc.includes('icon') &&
+                                !imageSrc.includes('banner') &&
+                                !imageSrc.includes('ad') &&
+                                imageSrc !== 'about:blank' &&
+                                imageSrc.length > 10) {
+                                
+                                console.log(`✅ Found valid background image: ${imageSrc}`);
+                                return imageSrc;
+                            }
+                        }
+                    }
+                }
+                
+                // Strategy 4: Look for data attributes
+                console.log('🔍 Strategy 4: Scanning data attributes...');
+                const elementsWithData = document.querySelectorAll('[data-src], [data-image], [data-poster], [data-thumb]');
+                for (const element of elementsWithData) {
+                    const dataAttrs = ['data-src', 'data-image', 'data-poster', 'data-thumb'];
+                    for (const attr of dataAttrs) {
+                        let imageSrc = element.getAttribute(attr);
+                        if (imageSrc && (imageSrc.includes('.jpg') || imageSrc.includes('.png') || imageSrc.includes('.jpeg'))) {
+                            console.log(`Found data attribute image: ${imageSrc}`);
+                            
+                            // Make relative URLs absolute
+                            if (imageSrc.startsWith('/')) {
+                                imageSrc = 'https://w1.123animes.ru' + imageSrc;
+                            }
+                            
+                            // Check if it's a valid anime poster
+                            if (imageSrc.startsWith('http') && 
+                                !imageSrc.includes('no_poster.png') &&
+                                !imageSrc.includes('no_poster.jpg') &&
+                                !imageSrc.includes('placeholder.') &&
+                                !imageSrc.includes('default.jpg') &&
+                                !imageSrc.includes('no-image.') &&
+                                !imageSrc.includes('loading.') &&
+                                !imageSrc.includes('lazy.') &&
+                                !imageSrc.includes('logo') &&
+                                !imageSrc.includes('icon') &&
+                                !imageSrc.includes('banner') &&
+                                !imageSrc.includes('ad') &&
+                                imageSrc !== 'about:blank' &&
+                                imageSrc.length > 10) {
+                                
+                                console.log(`✅ Found valid data attribute image: ${imageSrc}`);
+                                return imageSrc;
+                            }
+                        }
+                    }
+                }
+                
+                console.log('❌ No valid anime image found with any strategy');
+                return null;
+            };
+            
+            return findAnimeImage();
+        });
         
         let streamingLink = null;
         let attempts = 0;
@@ -199,6 +435,12 @@ export const scrapeSingleEpisode = async (episodeUrl) => {
         if (streamingLink) {
             console.log(`✅ Found valid streaming link: ${streamingLink.substring(0, 60)}...`);
             
+            if (animeImage) {
+                console.log(`🖼️ Found anime poster image: ${animeImage.substring(0, 60)}...`);
+            } else {
+                console.log(`❌ No anime poster image found`);
+            }
+            
             const episodePatterns = [
                 /episode[\/\-]?(\d+)/i,
                 /ep[\/\-]?(\d+)/i,
@@ -225,14 +467,28 @@ export const scrapeSingleEpisode = async (episodeUrl) => {
                     .replace(/\b\w/g, l => l.toUpperCase());
             }
             
+            const streamingData = {
+                title: animeTitle,
+                episode_number: episodeNumber,
+                episode_url: episodeUrl,
+                streaming_link: streamingLink,
+                image: animeImage, // Enhanced image extraction
+                range_id: 'single-episode',
+                strategy: 'single-episode',
+                source: '123animes'
+            };
+            
+            // 🚀 AUTO-SAVE TO DATABASE IMMEDIATELY AFTER PROCESSING
+            try {
+                await saveSingleStreamingLink(streamingData);
+                console.log(`💾 Saved to database: ${animeTitle} - Episode ${episodeNumber}`);
+            } catch (saveError) {
+                console.error(`❌ Failed to save to database: ${animeTitle} - Episode ${episodeNumber} - ${saveError.message}`);
+            }
+            
             return {
                 success: true,
-                data: {
-                    title: animeTitle,
-                    episode_number: episodeNumber,
-                    episode_url: episodeUrl,
-                    streaming_link: streamingLink,
-                },
+                data: streamingData,
                 extraction_time_seconds: parseFloat(((Date.now() - startTime) / 1000).toFixed(3))
             };
         } else {

@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import pLimit from 'p-limit';
+import { saveStreamingLink, saveBulkStreamingLinks } from './database/services/streamingLinkService.js';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -193,7 +194,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                         console.log(`    Episode ${anchorIndex + 1}: "${episodeNumber}" -> ${episodeUrl}`);
                     }
 
-                    // **ENHANCED FILTERING: More precise episode URL validation**
                     if (episodeUrl &&
                         (episodeUrl.includes('episode') ||
                             episodeUrl.includes('/ep-') ||
@@ -201,12 +201,10 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                             /\/\d+\/?$/.test(episodeUrl) ||
                             episodeUrl.includes(window.location.pathname))) {
 
-                        // **EPISODE NUMBER VALIDATION**
                         const episodeNumberMatch = episodeNumber.match(/(\d+)/);
                         if (episodeNumberMatch) {
                             const epNum = parseInt(episodeNumberMatch[1]);
 
-                            // **FILTER: Only add if episode number is reasonable (1-2000)**
                             if (epNum >= 1 && epNum <= 2000) {
                                 allEpisodeLinks.push({
                                     episode_number: episodeNumber,
@@ -215,7 +213,7 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                                     range_id: rangeId,
                                     range_index: rangeIndex + 1,
                                     strategy: 'range',
-                                    episode_num: epNum // Store numeric value for sorting
+                                    episode_num: epNum
                                 });
                             } else {
                                 console.log(`    Filtered out invalid episode number: ${episodeNumber} (${epNum})`);
@@ -248,7 +246,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                                 episodeUrl.includes('/ep/') ||
                                 /\/\d+\/?$/.test(episodeUrl))) {
 
-                            // **EPISODE NUMBER VALIDATION**
                             const episodeNumberMatch = episodeNumber.match(/(\d+)/);
                             if (episodeNumberMatch) {
                                 const epNum = parseInt(episodeNumberMatch[1]);
@@ -302,7 +299,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                                     episodeUrl.includes('/ep/') ||
                                     /\/\d+\/?$/.test(episodeUrl))) {
 
-                                // **EPISODE NUMBER VALIDATION**
                                 const episodeNumberMatch = episodeNumber.match(/(\d+)/);
                                 if (episodeNumberMatch) {
                                     const epNum = parseInt(episodeNumberMatch[1]);
@@ -325,7 +321,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                 });
             }
 
-            // **ENHANCED DEDUPLICATION: Remove duplicates by URL and episode number**
             const uniqueEpisodes = [];
             const seenUrls = new Set();
             const seenEpisodeNumbers = new Set();
@@ -334,7 +329,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                 const url = episode.episode_url;
                 const epNum = episode.episode_num;
 
-                // Check if we've seen this URL or episode number before
                 if (!seenUrls.has(url) && !seenEpisodeNumbers.has(epNum)) {
                     seenUrls.add(url);
                     seenEpisodeNumbers.add(epNum);
@@ -344,7 +338,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                 }
             });
 
-            // **ENHANCED SORTING: Sort by numeric episode number**
             const sortedEpisodes = uniqueEpisodes.sort((a, b) => {
                 return a.episode_num - b.episode_num;
             });
@@ -366,7 +359,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
                     console.log(`  ${strategy}: ${count} episodes`);
                 });
 
-                // **SHOW FIRST AND LAST FEW EPISODES**
                 console.log('\nFirst 5 episodes:');
                 sortedEpisodes.slice(0, 5).forEach(ep => {
                     console.log(`  Episode ${ep.episode_number}: ${ep.episode_url}`);
@@ -387,7 +379,6 @@ export const scrapeAnimeDetails = async (animeUrl) => {
 
         console.log(`📺 Found ${allEpisodes.length} actual episodes to process`);
 
-        // **VALIDATION: Check if episode count seems reasonable**
         if (allEpisodes.length > 1200) {
             console.log('⚠️  WARNING: Very high episode count detected. This might indicate duplicate detection.');
             console.log('First 10 episodes:');
@@ -562,15 +553,27 @@ export const scrapeAnimeDetails = async (animeUrl) => {
 
                     if (streamingLink) {
                         console.log(`      ✅ Found iframe for Episode ${episode.episode_number}: ${streamingLink.substring(0, 50)}...`);
-                        return {
+                        
+                        const streamingData = {
                             title: animeInfo.title,
                             episode_number: episode.episode_number,
                             episode_url: episode.episode_url,
                             streaming_link: streamingLink,
                             image: animeInfo.posterImage,
                             range_id: episode.range_id,
-                            strategy: episode.strategy
+                            strategy: episode.strategy,
+                            source: '123animes'
                         };
+
+                        // 🚀 AUTO-SAVE TO DATABASE IMMEDIATELY AFTER PROCESSING
+                        try {
+                            await saveStreamingLink(streamingData);
+                            console.log(`      💾 Saved to database: ${animeInfo.title} - Episode ${episode.episode_number}`);
+                        } catch (saveError) {
+                            console.error(`      ❌ Failed to save to database: ${animeInfo.title} - Episode ${episode.episode_number} - ${saveError.message}`);
+                        }
+
+                        return streamingData;
                     } else {
                         console.log(`      ❌ No valid iframe found for Episode ${episode.episode_number} after ${maxIframeAttempts} attempts`);
 
@@ -636,6 +639,7 @@ export const scrapeAnimeDetails = async (animeUrl) => {
         console.log(`✅ Successfully extracted: ${streamingLinks.length}/${allEpisodes.length} episodes`);
         console.log(`❌ Failed episodes: ${allEpisodes.length - streamingLinks.length}`);
         console.log(`📈 Success rate: ${((streamingLinks.length / allEpisodes.length) * 100).toFixed(1)}%`);
+        console.log(`💾 Database saves: ${streamingLinks.length} streaming links saved`);
 
         const strategyBreakdown = {};
         streamingLinks.forEach(link => {
