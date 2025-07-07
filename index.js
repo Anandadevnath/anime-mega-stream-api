@@ -9,25 +9,9 @@ import { scrapeHiAnimeWeeklyTop10 } from './scrapeHiAnimeWeeklyTop10.js';
 import { scrapeHiAnimeMonthlyTop10 } from './scrapeHiAnimeMonthlyTop10.js';
 import { 
     saveBulkAnime, 
-    getAllAnime, 
-    searchAnime, 
-    getAnimeStats,
-    getAnimeByCategory 
 } from './database/services/animeService.js';
-import { 
-    getStreamingLinksByAnime, 
-    getAllStreamingLinks, 
-    getStreamingLinksStats 
-} from './database/services/streamingLinkService.js';
-import { 
-    getSingleStreamingLinksByAnime, 
-    getAllSingleStreamingLinks, 
-    getSingleStreamingLinksStats 
-} from './database/services/singleStreamingLinkService.js';
 
 dotenv.config();
-
-// Connect to MongoDB
 connectDB();
 
 const app = express();
@@ -46,32 +30,6 @@ app.get('/', async (req, res) => {
     res.json({
         message: "🎬 Anime Scraper API is running!",
         version: "2.1.0",
-        endpoints: {
-            scraping: {
-                anime_list: "/anime-list?page=1",
-                anime_details: "/anime-details?id=anime-name",
-                episode_stream: "/episode-stream?id=anime-name&ep=1",
-                hianime_top10: "/hianime-top10",
-                hianime_weekly_top10: "/hianime-weekly-top10",
-                hianime_monthly_top10: "/hianime-monthly-top10"
-            },
-            database: {
-                anime: "/db/anime",
-                search: "/db/search?q=naruto",
-                trending: "/db/trending",
-                weekly: "/db/weekly",
-                monthly: "/db/monthly",
-                stats: "/db/stats"
-            },
-            streaming_links: {
-                all: "/db/streaming-links",
-                by_anime: "/db/streaming-links/anime?title=Naruto",
-                single_all: "/db/single-streaming-links",
-                single_by_anime: "/db/single-streaming-links/anime?title=Naruto",
-                stats: "/db/streaming-stats",
-                single_stats: "/db/single-streaming-stats"
-            }
-        }
     });
 });
 
@@ -81,23 +39,18 @@ app.get('/hianime-top10', async (req, res) => {
         console.log('🔥 Fetching HiAnime top 10 trending anime...');
         
         const startTime = Date.now();
-        const result = await scrapeHiAnimeTop10();
+        const top10Anime = await scrapeHiAnimeTop10();
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
         
-        console.log(`✅ Scraped ${result.data.length} trending anime in ${duration.toFixed(2)} seconds`);
+        console.log(`✅ Fetched ${top10Anime.length} trending anime in ${duration.toFixed(2)} seconds`);
         
         res.json({
-            success: result.success,
-            message: result.message,
+            success: true,
             source: "HiAnime.to",
-            scraping_stats: {
-                total_anime: result.data.length,
-                extraction_time_seconds: duration,
-                scraped_at: new Date().toISOString()
-            },
-            data: result.data,
-            database_save: result.database_save
+            total_anime: top10Anime.length,
+            extraction_time_seconds: duration,
+            data: top10Anime
         });
         
     } catch (error) {
@@ -116,24 +69,19 @@ app.get('/hianime-weekly-top10', async (req, res) => {
         console.log('📅 Fetching HiAnime weekly top 10 anime...');
         
         const startTime = Date.now();
-        const result = await scrapeHiAnimeWeeklyTop10();
+        const weeklyTop10Anime = await scrapeHiAnimeWeeklyTop10();
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
         
-        console.log(`✅ Scraped ${result.data.length} weekly anime in ${duration.toFixed(2)} seconds`);
+        console.log(`✅ Fetched ${weeklyTop10Anime.length} weekly anime in ${duration.toFixed(2)} seconds`);
         
         res.json({
-            success: result.success,
-            message: result.message,
+            success: true,
             source: "HiAnime.to",
             type: "weekly",
-            scraping_stats: {
-                total_anime: result.data.length,
-                extraction_time_seconds: duration,
-                scraped_at: new Date().toISOString()
-            },
-            data: result.data,
-            database_save: result.database_save
+            total_anime: weeklyTop10Anime.length,
+            extraction_time_seconds: duration,
+            data: weeklyTop10Anime
         });
         
     } catch (error) {
@@ -152,24 +100,19 @@ app.get('/hianime-monthly-top10', async (req, res) => {
         console.log('📅 Fetching HiAnime monthly top 10 anime...');
         
         const startTime = Date.now();
-        const result = await scrapeHiAnimeMonthlyTop10();
+        const monthlyTop10Anime = await scrapeHiAnimeMonthlyTop10();
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
         
-        console.log(`✅ Scraped ${result.data.length} monthly anime in ${duration.toFixed(2)} seconds`);
+        console.log(`✅ Fetched ${monthlyTop10Anime.length} monthly anime in ${duration.toFixed(2)} seconds`);
         
         res.json({
-            success: result.success,
-            message: result.message,
+            success: true,
             source: "HiAnime.to",
             type: "monthly",
-            scraping_stats: {
-                total_anime: result.data.length,
-                extraction_time_seconds: duration,
-                scraped_at: new Date().toISOString()
-            },
-            data: result.data,
-            database_save: result.database_save
+            total_anime: monthlyTop10Anime.length,
+            extraction_time_seconds: duration,
+            data: monthlyTop10Anime
         });
         
     } catch (error) {
@@ -212,22 +155,11 @@ app.get('/anime-list', async (req, res) => {
             console.error('❌ Error saving anime list to database:', dbError.message);
         }
         
-        res.json({
-            success: true,
-            source: "123animes.ru",
-            page: parseInt(page),
-            scraping_stats: {
-                total_anime: animeList.length,
-                extraction_time_seconds: duration,
-                scraped_at: new Date().toISOString()
-            },
-            data: animeList
-        });
+        res.json(animeList);
         
     } catch (error) {
         console.error('❌ Error fetching anime list:', error.message);
         res.status(500).json({ 
-            success: false,
             error: error.message,
             timestamp: new Date().toISOString()
         });
@@ -342,369 +274,10 @@ app.get('/episode-stream', async (req, res) => {
     }
 });
 
-// 💾 DATABASE ENDPOINTS
 
-// http://localhost:5000/db/anime
-app.get('/db/anime', async (req, res) => {
-    try {
-        const { page = 1, limit = 20, category, source } = req.query;
-        
-        console.log(`🔍 Fetching anime from database - Page: ${page}, Limit: ${limit}`);
-        
-        const result = await getAllAnime(page, limit);
-        
-        res.json({
-            success: true,
-            data: result.anime,
-            pagination: result.pagination,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching anime from database:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/search?q=naruto
-app.get('/db/search', async (req, res) => {
-    try {
-        const { q, limit = 10 } = req.query;
-        
-        if (!q) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Search query (q) parameter is required',
-                example: '/db/search?q=naruto'
-            });
-        }
-        
-        console.log(`🔍 Searching anime in database for: "${q}"`);
-        
-        const result = await searchAnime(q, limit);
-        
-        res.json({
-            success: true,
-            search_query: q,
-            data: result,
-            total_results: result.length,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error searching anime in database:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/trending
-app.get('/db/trending', async (req, res) => {
-    try {
-        const { limit = 10 } = req.query;
-        
-        console.log(`🔥 Fetching trending anime from database`);
-        
-        const result = await getAnimeByCategory('trending', limit);
-        
-        res.json({
-            success: true,
-            category: 'trending',
-            data: result,
-            total_results: result.length,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching trending anime from database:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/weekly
-app.get('/db/weekly', async (req, res) => {
-    try {
-        const { limit = 10 } = req.query;
-        
-        console.log(`📅 Fetching weekly anime from database`);
-        
-        const result = await getAnimeByCategory('weekly', limit);
-        
-        res.json({
-            success: true,
-            category: 'weekly',
-            data: result,
-            total_results: result.length,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching weekly anime from database:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/monthly
-app.get('/db/monthly', async (req, res) => {
-    try {
-        const { limit = 10 } = req.query;
-        
-        console.log(`📅 Fetching monthly anime from database`);
-        
-        const result = await getAnimeByCategory('monthly', limit);
-        
-        res.json({
-            success: true,
-            category: 'monthly',
-            data: result,
-            total_results: result.length,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching monthly anime from database:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/stats
-app.get('/db/stats', async (req, res) => {
-    try {
-        console.log(`📊 Fetching anime statistics from database`);
-        
-        const stats = await getAnimeStats();
-        
-        res.json({
-            success: true,
-            statistics: stats,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching anime statistics:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// 🎬 STREAMING LINKS ENDPOINTS
-
-// http://localhost:5000/db/streaming-links
-app.get('/db/streaming-links', async (req, res) => {
-    try {
-        const { page = 1, limit = 50 } = req.query;
-        
-        console.log(`🔍 Fetching streaming links from database - Page: ${page}, Limit: ${limit}`);
-        
-        const result = await getAllStreamingLinks(page, limit);
-        
-        res.json({
-            success: true,
-            data: result.streamingLinks,
-            pagination: result.pagination,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching streaming links from database:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/streaming-links/anime?title=Naruto
-app.get('/db/streaming-links/anime', async (req, res) => {
-    try {
-        const { title, limit = 50 } = req.query;
-        
-        if (!title) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Title parameter is required',
-                example: '/db/streaming-links/anime?title=Naruto'
-            });
-        }
-        
-        console.log(`🔍 Fetching streaming links for anime: "${title}"`);
-        
-        const result = await getStreamingLinksByAnime(title, limit);
-        
-        res.json({
-            success: true,
-            anime_title: title,
-            data: result,
-            total_episodes: result.length,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching anime streaming links:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/streaming-stats
-app.get('/db/streaming-stats', async (req, res) => {
-    try {
-        console.log(`📊 Fetching streaming links statistics from database`);
-        
-        const stats = await getStreamingLinksStats();
-        
-        res.json({
-            success: true,
-            statistics: stats,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching streaming links statistics:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// 🎯 SINGLE STREAMING LINKS ENDPOINTS
-
-// http://localhost:5000/db/single-streaming-links
-app.get('/db/single-streaming-links', async (req, res) => {
-    try {
-        const { page = 1, limit = 50 } = req.query;
-        
-        console.log(`🔍 Fetching single streaming links from database - Page: ${page}, Limit: ${limit}`);
-        
-        const result = await getAllSingleStreamingLinks(page, limit);
-        
-        res.json({
-            success: true,
-            data: result.streamingLinks,
-            pagination: result.pagination,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching single streaming links from database:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/single-streaming-links/anime?title=Naruto
-app.get('/db/single-streaming-links/anime', async (req, res) => {
-    try {
-        const { title, limit = 50 } = req.query;
-        
-        if (!title) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Title parameter is required',
-                example: '/db/single-streaming-links/anime?title=Naruto'
-            });
-        }
-        
-        console.log(`🔍 Fetching single streaming links for anime: "${title}"`);
-        
-        const result = await getSingleStreamingLinksByAnime(title, limit);
-        
-        res.json({
-            success: true,
-            anime_title: title,
-            data: result,
-            total_episodes: result.length,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching single anime streaming links:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/db/single-streaming-stats
-app.get('/db/single-streaming-stats', async (req, res) => {
-    try {
-        console.log(`📊 Fetching single streaming links statistics from database`);
-        
-        const stats = await getSingleStreamingLinksStats();
-        
-        res.json({
-            success: true,
-            statistics: stats,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching single streaming links statistics:', error.message);
-        res.status(500).json({ 
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
     console.log(`🚀 Anime Scraper API v2.1 running at http://localhost:${PORT}`);
-    console.log(`📡 Available endpoints:`);
-    console.log(`   🎬 Scraping:`);
-    console.log(`      📝 /anime-list?page=1`);
-    console.log(`      📋 /anime-details?id=anime-name`);
-    console.log(`      📺 /episode-stream?id=anime-name&ep=1`);
-    console.log(`      🔥 /hianime-top10`);
-    console.log(`      📅 /hianime-weekly-top10, /hianime-monthly-top10`);
-    console.log(`   💾 Database:`);
-    console.log(`      📚 /db/anime - Get all anime with pagination`);
-    console.log(`      🔍 /db/search?q=naruto - Search anime`);
-    console.log(`      🔥 /db/trending - Get trending anime`);
-    console.log(`      📅 /db/weekly - Get weekly anime`);
-    console.log(`      📅 /db/monthly - Get monthly anime`);
-    console.log(`      📊 /db/stats - Get anime statistics`);
-    console.log(`   🎥 Streaming Links:`);
-    console.log(`      📋 /db/streaming-links - Get all streaming links`);
-    console.log(`      🎬 /db/streaming-links/anime?title=Naruto - Get by anime`);
-    console.log(`      📊 /db/streaming-stats - Get streaming statistics`);
-    console.log(`   🎯 Single Streaming Links:`);
-    console.log(`      📋 /db/single-streaming-links - Get all single streaming links`);
-    console.log(`      🎬 /db/single-streaming-links/anime?title=Naruto - Get by anime`);
-    console.log(`      📊 /db/single-streaming-stats - Get single streaming statistics`);
 });
