@@ -13,7 +13,8 @@ const animeSchema = new mongoose.Schema({
     anime_redirect_link: {
         type: String,
         required: true,
-        unique: true
+        unique: true,
+        index: true
     },
     episodes: {
         type: String,
@@ -88,7 +89,6 @@ const animeSchema = new mongoose.Schema({
 
 // Create indexes for better performance
 animeSchema.index({ title: 1 });
-animeSchema.index({ anime_redirect_link: 1 });
 animeSchema.index({ category: 1 });
 animeSchema.index({ source: 1 });
 animeSchema.index({ scraped_at: -1 });
