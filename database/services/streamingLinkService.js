@@ -50,20 +50,20 @@ export const saveBulkStreamingLinks = async (linksData) => {
     }
 };
 
-export const getStreamingLinksByAnime = async (animeTitle, limit = 50) => {
-    try {
-        const streamingLinks = await StreamingLink.find({ 
-            title: { $regex: animeTitle, $options: 'i' } 
-        })
-        .sort({ episode_number: 1 })
-        .limit(limit);
+// export const getStreamingLinksByAnime = async (animeTitle, limit = 50) => {
+//     try {
+//         const streamingLinks = await StreamingLink.find({ 
+//             title: { $regex: animeTitle, $options: 'i' } 
+//         })
+//         .sort({ episode_number: 1 })
+//         .limit(limit);
         
-        return streamingLinks;
-    } catch (error) {
-        console.error(`❌ Error getting streaming links by anime: ${error.message}`);
-        throw error;
-    }
-};
+//         return streamingLinks;
+//     } catch (error) {
+//         console.error(`❌ Error getting streaming links by anime: ${error.message}`);
+//         throw error;
+//     }
+// };
 
 export const getAllStreamingLinks = async (page = 1, limit = 50) => {
     try {
@@ -90,60 +90,60 @@ export const getAllStreamingLinks = async (page = 1, limit = 50) => {
     }
 };
 
-export const getStreamingLinksStats = async () => {
-    try {
-        const stats = await StreamingLink.aggregate([
-            {
-                $group: {
-                    _id: null,
-                    total_links: { $sum: 1 },
-                    unique_anime: { $addToSet: '$title' },
-                    unique_sources: { $addToSet: '$source' }
-                }
-            },
-            {
-                $project: {
-                    total_links: 1,
-                    unique_anime_count: { $size: '$unique_anime' },
-                    unique_sources_count: { $size: '$unique_sources' }
-                }
-            }
-        ]);
+// export const getStreamingLinksStats = async () => {
+//     try {
+//         const stats = await StreamingLink.aggregate([
+//             {
+//                 $group: {
+//                     _id: null,
+//                     total_links: { $sum: 1 },
+//                     unique_anime: { $addToSet: '$title' },
+//                     unique_sources: { $addToSet: '$source' }
+//                 }
+//             },
+//             {
+//                 $project: {
+//                     total_links: 1,
+//                     unique_anime_count: { $size: '$unique_anime' },
+//                     unique_sources_count: { $size: '$unique_sources' }
+//                 }
+//             }
+//         ]);
 
-        const animeStats = await StreamingLink.aggregate([
-            {
-                $group: {
-                    _id: '$title',
-                    episode_count: { $sum: 1 }
-                }
-            },
-            {
-                $sort: { episode_count: -1 }
-            },
-            {
-                $limit: 10
-            }
-        ]);
+//         const animeStats = await StreamingLink.aggregate([
+//             {
+//                 $group: {
+//                     _id: '$title',
+//                     episode_count: { $sum: 1 }
+//                 }
+//             },
+//             {
+//                 $sort: { episode_count: -1 }
+//             },
+//             {
+//                 $limit: 10
+//             }
+//         ]);
 
-        const sourceStats = await StreamingLink.aggregate([
-            {
-                $group: {
-                    _id: '$source',
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
+//         const sourceStats = await StreamingLink.aggregate([
+//             {
+//                 $group: {
+//                     _id: '$source',
+//                     count: { $sum: 1 }
+//                 }
+//             }
+//         ]);
 
-        return {
-            ...stats[0],
-            top_anime_by_episodes: animeStats,
-            source_breakdown: sourceStats
-        };
-    } catch (error) {
-        console.error(`❌ Error getting streaming links stats: ${error.message}`);
-        throw error;
-    }
-};
+//         return {
+//             ...stats[0],
+//             top_anime_by_episodes: animeStats,
+//             source_breakdown: sourceStats
+//         };
+//     } catch (error) {
+//         console.error(`❌ Error getting streaming links stats: ${error.message}`);
+//         throw error;
+//     }
+// };
 
 export const searchStreamingLinks = async (query, limit = 20) => {
     try {

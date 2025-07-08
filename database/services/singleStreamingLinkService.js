@@ -50,17 +50,17 @@ export const saveBulkSingleStreamingLinks = async (streamingLinksData) => {
     }
 };
 
-export const getSingleStreamingLinksByAnime = async (animeTitle, limit = 50) => {
-    try {
-        const streamingLinks = await SingleStreamingLink.find({ title: animeTitle })
-            .sort({ episode_number: 1 })
-            .limit(limit);
-        return streamingLinks;
-    } catch (error) {
-        console.error('Error fetching single streaming links:', error.message);
-        throw error;
-    }
-};
+// export const getSingleStreamingLinksByAnime = async (animeTitle, limit = 50) => {
+//     try {
+//         const streamingLinks = await SingleStreamingLink.find({ title: animeTitle })
+//             .sort({ episode_number: 1 })
+//             .limit(limit);
+//         return streamingLinks;
+//     } catch (error) {
+//         console.error('Error fetching single streaming links:', error.message);
+//         throw error;
+//     }
+// };
 
 export const getAllSingleStreamingLinks = async (page = 1, limit = 50) => {
     try {
