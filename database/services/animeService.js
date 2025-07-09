@@ -51,17 +51,17 @@ export const saveBulkAnime = async (animeList, category = 'general') => {
     }
 };
 
-export const getAnimeByCategory = async (category, limit = 10) => {
-    try {
-        const anime = await Anime.find({ category })
-            .sort({ scraped_at: -1 })
-            .limit(limit);
-        return anime;
-    } catch (error) {
-        console.error(`❌ Error getting anime by category: ${error.message}`);
-        throw error;
-    }
-};
+// export const getAnimeByCategory = async (category, limit = 10) => {
+//     try {
+//         const anime = await Anime.find({ category })
+//             .sort({ scraped_at: -1 })
+//             .limit(limit);
+//         return anime;
+//     } catch (error) {
+//         console.error(`❌ Error getting anime by category: ${error.message}`);
+//         throw error;
+//     }
+// };
 
 export const getAllAnime = async (page = 1, limit = 20) => {
     try {
@@ -88,24 +88,24 @@ export const getAllAnime = async (page = 1, limit = 20) => {
     }
 };
 
-export const searchAnime = async (query, limit = 10) => {
-    try {
-        const anime = await Anime.find({
-            $or: [
-                { title: { $regex: query, $options: 'i' } },
-                { genres: { $regex: query, $options: 'i' } },
-                { description: { $regex: query, $options: 'i' } }
-            ]
-        })
-        .sort({ scraped_at: -1 })
-        .limit(limit);
+// export const searchAnime = async (query, limit = 10) => {
+//     try {
+//         const anime = await Anime.find({
+//             $or: [
+//                 { title: { $regex: query, $options: 'i' } },
+//                 { genres: { $regex: query, $options: 'i' } },
+//                 { description: { $regex: query, $options: 'i' } }
+//             ]
+//         })
+//         .sort({ scraped_at: -1 })
+//         .limit(limit);
         
-        return anime;
-    } catch (error) {
-        console.error(`❌ Error searching anime: ${error.message}`);
-        throw error;
-    }
-};
+//         return anime;
+//     } catch (error) {
+//         console.error(`❌ Error searching anime: ${error.message}`);
+//         throw error;
+//     }
+// };
 
 export const getAnimeStats = async () => {
     try {
@@ -153,6 +153,21 @@ export const getAnimeStats = async () => {
         };
     } catch (error) {
         console.error(`❌ Error getting anime stats: ${error.message}`);
+        throw error;
+    }
+};
+
+// Get a paginated list of anime for streaming link scraping
+export const getAnimeList = async (limit = 10, skip = 0) => {
+    try {
+        const anime = await Anime.find()
+            .sort({ scraped_at: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+        return anime;
+    } catch (error) {
+        console.error(`❌ Error getting anime list: ${error.message}`);
         throw error;
     }
 };

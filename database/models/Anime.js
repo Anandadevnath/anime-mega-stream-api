@@ -63,26 +63,6 @@ const animeSchema = new mongoose.Schema({
         enum: ['trending', 'weekly', 'monthly', 'general'],
         default: 'general'
     },
-    monthly_rank: {
-        type: Number,
-        default: null
-    },
-    weekly_rank: {
-        type: Number,
-        default: null
-    },
-    trending_rank: {
-        type: Number,
-        default: null
-    },
-    scraped_at: {
-        type: Date,
-        default: Date.now
-    },
-    updated_at: {
-        type: Date,
-        default: Date.now
-    }
 }, {
     timestamps: true
 });

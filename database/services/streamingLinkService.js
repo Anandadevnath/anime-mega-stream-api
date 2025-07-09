@@ -50,17 +50,26 @@ export const saveBulkStreamingLinks = async (linksData) => {
     }
 };
 
-export const getStreamingLinksByAnime = async (animeTitle, limit = 50) => {
+export const getStreamingLinksByTitle = async (title) => {
+    // Normalize: lowercase, replace spaces with dashes
+    const slug = title.trim().toLowerCase().replace(/\s+/g, '-');
     try {
-        const streamingLinks = await StreamingLink.find({ 
-            title: { $regex: animeTitle, $options: 'i' } 
-        })
-        .sort({ episode_number: 1 })
-        .limit(limit);
-        
-        return streamingLinks;
+        return await StreamingLink.find({
+            $expr: {
+                $eq: [
+                    {
+                        $replaceAll: {
+                            input: { $toLower: "$title" },
+                            find: " ",
+                            replacement: "-"
+                        }
+                    },
+                    slug
+                ]
+            }
+        }).sort({ episode_number: 1 });
     } catch (error) {
-        console.error(`❌ Error getting streaming links by anime: ${error.message}`);
+        console.error('Error fetching streaming links by title:', error.message);
         throw error;
     }
 };
@@ -98,105 +107,24 @@ export const getStreamingLinksStats = async () => {
                     _id: null,
                     total_links: { $sum: 1 },
                     unique_anime: { $addToSet: '$title' },
-                    unique_sources: { $addToSet: '$source' }
+                    sources: { $addToSet: '$source' }
                 }
             },
             {
                 $project: {
                     total_links: 1,
                     unique_anime_count: { $size: '$unique_anime' },
-                    unique_sources_count: { $size: '$unique_sources' }
+                    sources: 1
                 }
             }
         ]);
-
-        const animeStats = await StreamingLink.aggregate([
-            {
-                $group: {
-                    _id: '$title',
-                    episode_count: { $sum: 1 }
-                }
-            },
-            {
-                $sort: { episode_count: -1 }
-            },
-            {
-                $limit: 10
-            }
-        ]);
-
-        const sourceStats = await StreamingLink.aggregate([
-            {
-                $group: {
-                    _id: '$source',
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        return {
-            ...stats[0],
-            top_anime_by_episodes: animeStats,
-            source_breakdown: sourceStats
+        return stats[0] || {
+            total_links: 0,
+            unique_anime_count: 0,
+            sources: []
         };
     } catch (error) {
-        console.error(`❌ Error getting streaming links stats: ${error.message}`);
-        throw error;
-    }
-};
-
-export const searchStreamingLinks = async (query, limit = 20) => {
-    try {
-        const streamingLinks = await StreamingLink.find({
-            $or: [
-                { title: { $regex: query, $options: 'i' } },
-                { episode_number: { $regex: query, $options: 'i' } }
-            ]
-        })
-        .sort({ created_at: -1 })
-        .limit(limit);
-        
-        return streamingLinks;
-    } catch (error) {
-        console.error(`❌ Error searching streaming links: ${error.message}`);
-        throw error;
-    }
-};
-
-export const getStreamingLinksBySource = async (source, limit = 50) => {
-    try {
-        const streamingLinks = await StreamingLink.find({ source })
-            .sort({ created_at: -1 })
-            .limit(limit);
-        
-        return streamingLinks;
-    } catch (error) {
-        console.error(`❌ Error getting streaming links by source: ${error.message}`);
-        throw error;
-    }
-};
-
-export const deleteStreamingLinksByAnime = async (animeTitle) => {
-    try {
-        const result = await StreamingLink.deleteMany({ 
-            title: { $regex: animeTitle, $options: 'i' } 
-        });
-        
-        console.log(`🗑️ Deleted ${result.deletedCount} streaming links for anime: ${animeTitle}`);
-        return result;
-    } catch (error) {
-        console.error(`❌ Error deleting streaming links: ${error.message}`);
-        throw error;
-    }
-};
-
-export const clearAllStreamingLinks = async () => {
-    try {
-        const result = await StreamingLink.deleteMany({});
-        console.log(`🗑️ Cleared all streaming links. Deleted count: ${result.deletedCount}`);
-        return result;
-    } catch (error) {
-        console.error(`❌ Error clearing all streaming links: ${error.message}`);
+        console.error('Error fetching streaming links stats:', error.message);
         throw error;
     }
 };
