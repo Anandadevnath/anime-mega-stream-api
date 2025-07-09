@@ -136,4 +136,5 @@ router.get('/anime-details', async (req, res) => {
     }
 });
 
+
 export default router;

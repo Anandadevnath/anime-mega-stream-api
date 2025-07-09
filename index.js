@@ -13,7 +13,9 @@ import {
     saveBulkAnime,
 } from './database/services/animeService.js';
 
+
 import dbRoutes from './indexdb.js';
+import removeAnimeRouter from './removeanime.js';
 
 dotenv.config();
 connectDB();
@@ -30,6 +32,8 @@ app.use((req, res, next) => {
 });
 
 // Use database routes
+
+app.use(removeAnimeRouter);
 app.use('/db', dbRoutes);
 
 // root endpoint with complete API documentation
@@ -489,6 +493,7 @@ app.get('/streaming-links', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 const PORT = process.env.PORT || 5000;
 
