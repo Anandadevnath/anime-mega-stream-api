@@ -299,6 +299,7 @@ app.get('/episode-stream', async (req, res) => {
 
 // http://localhost:5000/scrape-pages?start=281&end=300
 // http://localhost:5000/streaming-links?start=0&end=9
+// http://localhost:5000/remove-anime?id=one-piece
 
 // http://localhost:5000/scrape-all-pages
 app.get('/scrape-all-pages', async (req, res) => {

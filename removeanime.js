@@ -4,12 +4,10 @@ import StreamingLink from './database/models/StreamingLink.js';
 
 const router = express.Router();
 
-// Helper function to normalize anime titles
 function normalizeTitle(title) {
   return title.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
-// DELETE /remove-anime?id=anime-title
 router.delete('/remove-anime', async (req, res) => {
   const { id } = req.query;
   if (!id) {
@@ -17,7 +15,6 @@ router.delete('/remove-anime', async (req, res) => {
   }
   const normalizedTitle = normalizeTitle(id);
   try {
-    // Delete by normalized title logic (normalize the title field in DB)
     const result = await StreamingLink.deleteMany({
       $expr: {
         $eq: [
