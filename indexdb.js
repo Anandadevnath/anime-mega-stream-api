@@ -136,5 +136,12 @@ router.get('/anime-details', async (req, res) => {
     }
 });
 
+// http://localhost:5000/db/anime-list?page=1
+
+// http://localhost:5000/db/stats
+
+// http://localhost:5000/db/streaming-links
+// http://localhost:5000/db/single-streaming-links
+// http://localhost:5000/db/anime-details?id=your-forma
 
 export default router;

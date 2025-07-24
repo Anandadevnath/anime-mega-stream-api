@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer';
 import pLimit from 'p-limit';
-import { saveAnime } from './database/services/animeService.js';
+import { saveAnime } from '../database/services/animeService.js';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

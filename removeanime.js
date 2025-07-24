@@ -1,5 +1,4 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import StreamingLink from './database/models/StreamingLink.js';
 
 const router = express.Router();

@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer';
-import { saveSingleStreamingLink } from './database/services/singleStreamingLinkService.js';
+import { saveSingleStreamingLink } from '../database/services/singleStreamingLinkService.js';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

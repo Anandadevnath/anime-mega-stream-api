@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer';
 import pLimit from 'p-limit';
-import { saveStreamingLink } from './database/services/streamingLinkService.js';
+import { saveStreamingLink } from '../database/services/streamingLinkService.js';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
