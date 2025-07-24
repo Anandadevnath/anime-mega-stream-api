@@ -1,19 +1,21 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import connectDB from './database/config.js';
-import { scrapeFilmList } from './scrapeFilmList.js';
-import { scrapeAnimeDetails } from './scrapeAnimeDetails.js';
-import { scrapeSingleEpisode } from './scrapeSingleEpisode.js';
+import { scrapeFilmList } from './scrapeanime/scrapeFilmList.js';
+import { scrapeAnimeDetails } from './scrapeanime/scrapeAnimeDetails.js';
+import { scrapeSingleEpisode } from './scrapeanime/scrapeSingleEpisode.js';
 import { scrapeHiAnimeTop10 } from './Top-Animes/scrapeHiAnimeTop10.js';
 import { scrapeHiAnimeWeeklyTop10 } from './Top-Animes/scrapeHiAnimeWeeklyTop10.js';
 import { scrapeHiAnimeMonthlyTop10 } from './Top-Animes/scrapeHiAnimeMonthlyTop10.js';
-import { scrapeFilmList100, scrapeAll501Pages, scrapeInBatches } from './scrapeFilmList100.js';
-import { scrapeAnimeDetailsBatch } from './scrapeAnimeDetails100.js';
+import { scrapeFilmList100, scrapeAll501Pages, scrapeInBatches } from './scrapeanime100.js/scrapeFilmList100.js';
+import { scrapeAnimeDetailsBatch } from './scrapeanime100.js/scrapeAnimeDetails100.js';
 import {
     saveBulkAnime,
 } from './database/services/animeService.js';
 
+
 import dbRoutes from './indexdb.js';
+import removeAnimeRouter from './removeanime.js';
 
 dotenv.config();
 connectDB();
@@ -29,14 +31,32 @@ app.use((req, res, next) => {
     next();
 });
 
-// Use database routes
+app.use(removeAnimeRouter);
 app.use('/db', dbRoutes);
 
-// root endpoint with complete API documentation
-app.get('/', async (req, res) => {
+// root 
+app.get('/', (req, res) => {
     res.json({
         message: "🎬 Anime Scraper API is running!",
         version: "2.1.0",
+        endpoints: [
+            // Normal endpoints
+            "/hianime-top10",
+            "/hianime-weekly-top10",
+            "/hianime-monthly-top10",
+            "/anime-list?page=1",
+            "/anime-details?id=your-forma",
+            "/episode-stream?id=sentai-daishikkaku-2nd-season-dub&ep=1",
+            "/scrape-pages?start=281&end=300",
+            "/streaming-links?start=1213&end=7000",
+            "/remove-anime?id=one-piece",
+            // DB endpoints
+            "/db/anime-list?page=1",
+            "/db/stats",
+            "/db/streaming-links",
+            "/db/single-streaming-links",
+            "/db/anime-details?id=your-forma"
+        ],
     });
 });
 
@@ -292,203 +312,19 @@ app.get('/episode-stream', async (req, res) => {
     }
 });
 
+// root
+// http://localhost:5000/hianime-top10
+// http://localhost:5000/hianime-weekly-top10
+// http://localhost:5000/hianime-monthly-top10
+
+// http://localhost:5000/anime-list?page=1
+// http://localhost:5000/anime-details?id=your-forma
+// http://localhost:5000/episode-stream?id=sentai-daishikkaku-2nd-season-dub&ep=1
 
 // http://localhost:5000/scrape-pages?start=281&end=300
-// http://localhost:5000/streaming-links?start=0&end=9
+// http://localhost:5000/streaming-links?start=1213&end=7000
+// http://localhost:5000/remove-anime?id=one-piece
 
-// http://localhost:5000/scrape-all-pages
-app.get('/scrape-all-pages', async (req, res) => {
-    try {
-        console.log('🚀 Starting to scrape all 501 pages...');
-        
-        // Set longer timeout for this endpoint
-        req.setTimeout(0); // No timeout
-        res.setTimeout(0); // No timeout
-        
-        const startTime = Date.now();
-        
-        // Send immediate response to acknowledge request
-        res.status(202).json({
-            success: true,
-            message: "🚀 Started scraping all 501 pages in the background",
-            status: "processing",
-            estimated_time: "30-60 minutes",
-            progress_check: "Check server logs for real-time progress",
-            timestamp: new Date().toISOString()
-        });
-        
-        // Start scraping in background
-        scrapeAll501Pages()
-            .then(result => {
-                const endTime = Date.now();
-                const totalTime = (endTime - startTime) / 1000 / 60; // in minutes
-                
-                console.log(`\n🎉 BULK SCRAPING COMPLETED!`);
-                console.log(`⏱️ Total time: ${totalTime.toFixed(2)} minutes`);
-                console.log(`📊 Final Result:`, result);
-            })
-            .catch(error => {
-                console.error('❌ Bulk scraping failed:', error.message);
-            });
-            
-    } catch (error) {
-        console.error('❌ Error starting bulk scrape:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/scrape-in-batches?batch_size=50
-app.get('/scrape-in-batches', async (req, res) => {
-    try {
-        const batchSize = parseInt(req.query.batch_size) || 50;
-        
-        console.log(`🚀 Starting to scrape 501 pages in batches of ${batchSize}...`);
-        
-        // Validate batch size
-        if (batchSize < 1 || batchSize > 100) {
-            return res.status(400).json({
-                success: false,
-                error: 'Batch size must be between 1 and 100',
-                example: '/scrape-in-batches?batch_size=50'
-            });
-        }
-        
-        req.setTimeout(0); // No timeout
-        res.setTimeout(0); // No timeout
-        
-        const startTime = Date.now();
-        
-        // Send immediate response
-        res.status(202).json({
-            success: true,
-            message: `🚀 Started scraping 501 pages in batches of ${batchSize}`,
-            status: "processing",
-            batch_size: batchSize,
-            total_batches: Math.ceil(501 / batchSize),
-            estimated_time: "20-40 minutes",
-            progress_check: "Check server logs for real-time progress",
-            timestamp: new Date().toISOString()
-        });
-        
-        // Start batch scraping in background
-        scrapeInBatches(batchSize)
-            .then(result => {
-                const endTime = Date.now();
-                const totalTime = (endTime - startTime) / 1000 / 60; // in minutes
-                
-                console.log(`\n🎉 BATCH SCRAPING COMPLETED!`);
-                console.log(`⏱️ Total time: ${totalTime.toFixed(2)} minutes`);
-                console.log(`📊 Final Result:`, result);
-            })
-            .catch(error => {
-                console.error('❌ Batch scraping failed:', error.message);
-            });
-            
-    } catch (error) {
-        console.error('❌ Error starting batch scrape:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/scrape-pages?start=1&end=100
-app.get('/scrape-pages', async (req, res) => {
-    try {
-        const startPage = parseInt(req.query.start) || 1;
-        const endPage = parseInt(req.query.end) || 10;
-        
-        // Validate page range
-        if (startPage < 1 || endPage < 1) {
-            return res.status(400).json({
-                success: false,
-                error: 'Start and end pages must be positive integers',
-                example: '/scrape-pages?start=1&end=100'
-            });
-        }
-        
-        if (startPage > endPage) {
-            return res.status(400).json({
-                success: false,
-                error: 'Start page must be less than or equal to end page',
-                example: '/scrape-pages?start=1&end=100'
-            });
-        }
-        
-        if (endPage > 501) {
-            return res.status(400).json({
-                success: false,
-                error: 'End page cannot exceed 501',
-                example: '/scrape-pages?start=1&end=501'
-            });
-        }
-        
-        const totalPages = endPage - startPage + 1;
-        
-        if (totalPages > 100) {
-            return res.status(400).json({
-                success: false,
-                error: 'Cannot scrape more than 100 pages at once. Use batch scraping for larger ranges.',
-                suggestion: 'Use /scrape-in-batches?batch_size=50 for larger ranges'
-            });
-        }
-        
-        console.log(`🚀 Starting to scrape pages ${startPage} to ${endPage} (${totalPages} pages)...`);
-        
-        const startTime = Date.now();
-        const result = await scrapeFilmList100(startPage, endPage);
-        const endTime = Date.now();
-        const duration = (endTime - startTime) / 1000;
-        
-        console.log(`✅ Custom scraping completed in ${duration.toFixed(2)} seconds`);
-        
-        res.json({
-            success: true,
-            message: `Successfully scraped pages ${startPage} to ${endPage}`,
-            page_range: {
-                start: startPage,
-                end: endPage,
-                total_pages: totalPages
-            },
-            results: {
-                pages_processed: result.pages_processed,
-                pages_failed: result.pages_failed,
-                total_anime_found: result.total_anime_found,
-                total_anime_saved: result.total_anime_saved,
-                success_rate: result.success_rate + '%'
-            },
-            extraction_time_seconds: duration,
-            timestamp: new Date().toISOString()
-        });
-        
-    } catch (error) {
-        console.error('❌ Error in custom page scraping:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// http://localhost:5000/streaming-links?start=0&end=9
-app.get('/streaming-links', async (req, res) => {
-    const start = parseInt(req.query.start) || 0;
-    const end = parseInt(req.query.end) || 9;
-    const limit = end - start + 1;
-    try {
-        await scrapeAnimeDetailsBatch(start, limit);
-        res.json({ success: true, message: `Scraped anime ${start + 1} to ${end + 1}` });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
 
 const PORT = process.env.PORT || 5000;
 
