@@ -44,18 +44,13 @@ app.get('/', (req, res) => {
             "/hianime-top10",
             "/hianime-weekly-top10",
             "/hianime-monthly-top10",
-            "/anime-list?page=1",
-            "/anime-details?id=your-forma",
-            "/episode-stream?id=sentai-daishikkaku-2nd-season-dub&ep=1",
-            "/scrape-pages?start=281&end=300",
-            "/streaming-links?start=1213&end=7000",
             "/remove-anime?id=one-piece",
             // DB endpoints
             "/db/anime-list?page=1",
-            "/db/stats",
             "/db/streaming-links",
             "/db/single-streaming-links",
-            "/db/anime-details?id=your-forma"
+            "/db/anime-details?id=your-forma",
+            "/db/stats",
         ],
     });
 });
