@@ -25,9 +25,8 @@ export const scrapeFilmList100 = async (startPage = 1, endPage = 501) => {
         ]
     });
 
-    // Optimized concurrency limits
-    const pageLimit = pLimit(4); // Further reduced for better stability
-    const metadataLimit = pLimit(8); // Further reduced for better reliability
+    const pageLimit = pLimit(4);
+    const metadataLimit = pLimit(8); 
     
     let totalProcessed = 0;
     let totalSaved = 0;
@@ -38,7 +37,6 @@ export const scrapeFilmList100 = async (startPage = 1, endPage = 501) => {
         
         const pagePromises = [];
         
-        // Create promises for all pages
         for (let page = startPage; page <= endPage; page++) {
             const promise = pageLimit(async () => {
                 const pageUrl = `https://w1.123animes.ru/az-all-anime/all/?page=${page}`;
@@ -50,7 +48,6 @@ export const scrapeFilmList100 = async (startPage = 1, endPage = 501) => {
                     console.log(`✅ Page ${page} completed: Found ${animeList.length} anime`);
                     totalProcessed += animeList.length;
                     
-                    // Process metadata for this page's anime with retry logic
                     const processedAnime = await extractDetailedMetadataBatch(animeList, browser, metadataLimit, page);
                     totalSaved += processedAnime.filter(a => a.saved).length;
                     
@@ -74,10 +71,8 @@ export const scrapeFilmList100 = async (startPage = 1, endPage = 501) => {
         
         console.log(`⏳ Processing all ${pagePromises.length} pages concurrently...`);
         
-        // Wait for all pages to complete
         const results = await Promise.allSettled(pagePromises);
         
-        // Process results
         let successfulPages = 0;
         let failedPages = 0;
         let totalAnimeFound = 0;
@@ -96,7 +91,7 @@ export const scrapeFilmList100 = async (startPage = 1, endPage = 501) => {
         });
         
         const endTime = Date.now();
-        const totalTime = (endTime - startTime) / 1000 / 60; // in minutes
+        const totalTime = (endTime - startTime) / 1000 / 60;
         
         console.log(`\n🎉 SCRAPING COMPLETED!`);
         console.log(`📊 Summary:`);
@@ -138,7 +133,6 @@ const scrapeSinglePage = async (browser, url, pageNumber) => {
     try {
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         
-        // More aggressive request blocking
         await page.setRequestInterception(true);
         page.on('request', (req) => {
             const resourceType = req.resourceType();
@@ -161,15 +155,13 @@ const scrapeSinglePage = async (browser, url, pageNumber) => {
         console.log(`   🌐 Loading page ${pageNumber}...`);
         await page.goto(url, {
             waitUntil: 'domcontentloaded',
-            timeout: 30000 // Increased timeout
+            timeout: 30000
         });
 
-        // Wait for content with fallback
         try {
             await page.waitForSelector('.film-list', { timeout: 10000 });
         } catch (e) {
             console.log(`   ⚠️ Page ${pageNumber}: Film list container not found, trying alternatives...`);
-            // Try alternative selectors
             const alternatives = ['.container', '.main-content', '.content', '#content'];
             for (const selector of alternatives) {
                 try {
@@ -182,15 +174,13 @@ const scrapeSinglePage = async (browser, url, pageNumber) => {
             }
         }
 
-        await delay(2500); // Increased delay for stability
+        await delay(2500);
 
         console.log(`   🔍 Extracting anime from page ${pageNumber}...`);
         const animeList = await page.evaluate((pageNum) => {
             const filmList = document.querySelector('.film-list');
             const items = filmList ? filmList.querySelectorAll('.item') : document.querySelectorAll('.item');
             const animeData = [];
-
-            console.log(`Page ${pageNum}: Found ${items.length} anime items`);
 
             items.forEach((item, index) => {
                 const inner = item.querySelector('.inner');
@@ -223,7 +213,6 @@ const scrapeSinglePage = async (browser, url, pageNumber) => {
                         imageSrc = 'https://w1.123animes.ru' + imageSrc;
                     }
 
-                    // Filter out placeholder images
                     if (imageSrc && (
                         imageSrc.includes('no_poster.jpg') ||
                         imageSrc.includes('placeholder.') ||
@@ -290,13 +279,12 @@ const extractDetailedMetadataBatch = async (animeList, browser, limit, pageNumbe
     const promises = animeList.map((anime, index) =>
         limit(async () => {
             try {
-                const result = await extractAnimeMetadataWithRetry(anime, browser, 2); // Max 2 retries
+                const result = await extractAnimeMetadataWithRetry(anime, browser, 2);
                 console.log(`      ✅ Page ${pageNumber} - Anime ${index + 1}/${animeList.length}: ${anime.title}`);
                 return { ...result, saved: true };
             } catch (error) {
                 console.log(`      ❌ Page ${pageNumber} - Anime ${index + 1}/${animeList.length}: ${anime.title} - ${error.message}`);
                 
-                // Save basic data even if metadata extraction fails
                 const basicData = {
                     ...anime,
                     type: null,
@@ -304,7 +292,7 @@ const extractDetailedMetadataBatch = async (animeList, browser, limit, pageNumbe
                     country: null,
                     status: null,
                     released: null,
-                    description: null,
+                    description: "No description available for this anime.",
                     category: 'general',
                     source: '123animes'
                 };
@@ -325,7 +313,6 @@ const extractDetailedMetadataBatch = async (animeList, browser, limit, pageNumbe
     return results;
 };
 
-// IMPROVED: Retry logic for metadata extraction
 const extractAnimeMetadataWithRetry = async (anime, browser, maxRetries = 2) => {
     let lastError;
     
@@ -336,7 +323,7 @@ const extractAnimeMetadataWithRetry = async (anime, browser, maxRetries = 2) => 
             lastError = error;
             if (attempt < maxRetries) {
                 console.log(`      🔄 Retry ${attempt}/${maxRetries} for: ${anime.title}`);
-                await delay(3000 * attempt); // Progressive delay: 3s, 6s
+                await delay(3000 * attempt);
             }
         }
     }
@@ -344,21 +331,16 @@ const extractAnimeMetadataWithRetry = async (anime, browser, maxRetries = 2) => 
     throw lastError;
 };
 
-// COMPLETELY REWRITTEN: Fixed metadata extraction based on actual 123animes structure
 const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
     const page = await browser.newPage();
 
     try {
-        // Set a more realistic user agent
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         
-        // Minimal request blocking for metadata pages (allow more content to ensure metadata loads)
         await page.setRequestInterception(true);
         page.on('request', (req) => {
             const resourceType = req.resourceType();
             const url = req.url();
-            
-            // Only block heavy resources, allow most content for metadata extraction
             if (['image', 'media', 'font'].includes(resourceType) ||
                 url.includes('google-analytics') ||
                 url.includes('googletagmanager') ||
@@ -371,12 +353,9 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
             }
         });
 
-        // Set page viewport
         await page.setViewport({ width: 1280, height: 720 });
 
-        // Progressive timeout increase for retries
-        const timeout = 30000 + (attempt * 15000); // 30s, 45s
-        
+        const timeout = 30000 + (attempt * 15000);
         console.log(`        🌐 Loading metadata page (attempt ${attempt}, timeout: ${timeout/1000}s): ${anime.anime_redirect_link}`);
         
         await page.goto(anime.anime_redirect_link, {
@@ -384,7 +363,6 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
             timeout: timeout
         });
 
-        // Wait for content to load
         await delay(3000);
 
         const metadata = await page.evaluate((animeTitle) => {
@@ -397,56 +375,66 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                 description: null
             };
 
-            console.log('Starting metadata extraction for:', animeTitle);
-
-            // STRATEGY 1: Look for description in multiple locations
             const descriptionSelectors = [
-                '.short',
-                '.long', 
-                '.description',
-                '.synopsis',
-                '.summary',
-                '.overview',
-                '.anime-description',
-                '.story',
-                'p.dses',
-                '.plot-summary',
-                '[class*="description"]',
-                '[class*="synopsis"]',
-                '.detail .content',
-                '.detail-content',
-                '.info .description'
+                '.long', '.short', '.description', '.synopsis', '.summary', '.overview',
+                '.anime-description', '.story', 'p.dses', '.plot-summary',
+                '[class*="description"]', '[class*="synopsis"]', '.detail .content',
+                '.detail-content', '.info .description'
             ];
 
             for (const selector of descriptionSelectors) {
                 const element = document.querySelector(selector);
                 if (element && !metadata.description) {
                     const text = element.textContent.trim();
-                    if (text.length > 30 && text.length < 3000) {
-                        const lowerText = text.toLowerCase();
-                        // Better validation for description
-                        if (!lowerText.includes('keyboard shortcuts') && 
-                            !lowerText.includes('control the player') &&
-                            !lowerText.includes('video player') &&
-                            !lowerText.includes('click here to') &&
-                            !lowerText.includes('loading') &&
-                            !lowerText.includes('episode') &&
-                            (lowerText.includes('story') || lowerText.includes('follows') || 
-                             lowerText.includes('world') || lowerText.includes('life') ||
-                             lowerText.includes('adventure') || lowerText.includes('anime') ||
-                             lowerText.includes('character') || lowerText.includes('young') ||
-                             text.split(' ').length > 8)) { // At least 8 words
-                            metadata.description = text;
-                            console.log(`Found description using selector: ${selector}`);
-                            break;
-                        }
+                    if (
+                        text.length > 30 && text.length < 3000 &&
+                        !/keyboard shortcuts|control the player|video player|click here to|loading|episode/i.test(text) &&
+                        (
+                            /story|follows|world|life|adventure|anime|character|young/i.test(text) ||
+                            text.split(' ').length > 8
+                        )
+                    ) {
+                        metadata.description = text;
+                        break;
                     }
                 }
             }
 
-            // STRATEGY 2: Look for metadata in various structures
-            
-            // First try standard dt/dd structure
+            if (metadata.description) {
+                metadata.description = metadata.description.replace(/(You can also use the keyboard shortcuts.*|Keyboard shortcuts to control.*|Control the player.*|One way or another, keep comments.*|Comments related to the anime.*|About 123animes in general.*)/gi, '').trim();
+            }
+
+            // --- NEW: Extract and append keyword description if present ---
+            let keywordText = null;
+            // Try to find a block containing "Keywords:"
+            const keywordSelectors = [
+                'div', 'p', 'span', '.keywords', '[class*="keyword"]'
+            ];
+            for (const selector of keywordSelectors) {
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                    if (el.textContent && el.textContent.trim().startsWith('Keywords:')) {
+                        keywordText = el.textContent.trim();
+                        break;
+                    }
+                }
+                if (keywordText) break;
+            }
+            // If not found, try to find any text node containing "Keywords:"
+            if (!keywordText) {
+                const allText = document.body.textContent;
+                const match = allText.match(/Keywords:[^\n]+/i);
+                if (match) keywordText = match[0].trim();
+            }
+            if (keywordText) {
+                if (metadata.description && !metadata.description.includes(keywordText)) {
+                    metadata.description += '\n\n' + keywordText;
+                } else if (!metadata.description) {
+                    metadata.description = keywordText;
+                }
+            }
+            // --- END KEYWORD EXTRACTION ---
+
             const dtElements = document.querySelectorAll('dt');
             dtElements.forEach(dt => {
                 const dtText = dt.textContent.trim().toLowerCase();
@@ -455,17 +443,14 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                 if (dd && dd.tagName === 'DD') {
                     const ddText = dd.textContent.trim();
 
-                    // Type extraction
                     if ((dtText.includes('type') || dtText.includes('format') || dtText.includes('kind')) && !metadata.type) {
                         const typeLink = dd.querySelector('a');
                         let typeText = typeLink ? typeLink.textContent.trim() : ddText;
                         if (typeText && typeText.length < 50) {
                             metadata.type = typeText;
-                            console.log(`Found type: ${typeText}`);
                         }
                     }
 
-                    // Genres extraction
                     if ((dtText.includes('genre') || dtText.includes('category') || dtText.includes('tag')) && !metadata.genres) {
                         const genreLinks = dd.querySelectorAll('a');
                         if (genreLinks.length > 0) {
@@ -475,19 +460,15 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                                 .slice(0, 8);
                             if (genres.length > 0) {
                                 metadata.genres = genres.join(', ');
-                                console.log(`Found genres: ${metadata.genres}`);
                             }
                         } else if (ddText && ddText.length > 0 && ddText.length < 200) {
-                            // Fallback: extract genres from text
                             const genreText = ddText.split(',').map(g => g.trim()).filter(g => g.length > 0).slice(0, 6).join(', ');
                             if (genreText) {
                                 metadata.genres = genreText;
-                                console.log(`Found genres (text): ${genreText}`);
                             }
                         }
                     }
 
-                    // Country extraction
                     if ((dtText.includes('country') || dtText.includes('origin') || dtText.includes('nation')) && !metadata.country) {
                         const countryLink = dd.querySelector('a');
                         const countryText = countryLink ? countryLink.textContent.trim() : ddText;
@@ -505,35 +486,27 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                             } else {
                                 metadata.country = countryText;
                             }
-                            console.log(`Found country: ${metadata.country}`);
                         }
                     }
 
-                    // Status extraction
                     if ((dtText.includes('status') || dtText.includes('state')) && !metadata.status) {
                         const statusLink = dd.querySelector('a');
                         let statusText = statusLink ? statusLink.textContent.trim() : ddText;
                         if (statusText && statusText.length < 50) {
                             metadata.status = statusText;
-                            console.log(`Found status: ${statusText}`);
                         }
                     }
 
-                    // Release date extraction
                     if ((dtText.includes('released') || dtText.includes('aired') || dtText.includes('year') || dtText.includes('date')) && !metadata.released) {
                         const releasedLink = dd.querySelector('a');
                         let releasedText = releasedLink ? releasedLink.textContent.trim() : ddText;
                         if (releasedText && releasedText.length < 50) {
                             metadata.released = releasedText;
-                            console.log(`Found released: ${releasedText}`);
                         }
                     }
                 }
             });
 
-            // STRATEGY 3: Alternative selectors for missing metadata
-            
-            // Alternative type selectors
             if (!metadata.type) {
                 const typeSelectors = ['.type', '.format', '[data-type]', '.anime-type', '.kind'];
                 for (const selector of typeSelectors) {
@@ -542,14 +515,12 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                         const typeText = element.textContent.trim();
                         if (typeText && typeText.length < 50) {
                             metadata.type = typeText;
-                            console.log(`Found type (alt): ${typeText}`);
                             break;
                         }
                     }
                 }
             }
 
-            // Alternative genre selectors
             if (!metadata.genres) {
                 const genreSelectors = ['.genres', '.genre-list', '.categories', '.tags'];
                 for (const selector of genreSelectors) {
@@ -563,7 +534,6 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                                 .slice(0, 6);
                             if (genres.length > 0) {
                                 metadata.genres = genres.join(', ');
-                                console.log(`Found genres (alt): ${metadata.genres}`);
                                 break;
                             }
                         }
@@ -571,7 +541,6 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                 }
             }
 
-            // STRATEGY 4: Try to extract from page text if still missing important data
             if (!metadata.country) {
                 const pageText = document.body.textContent.toLowerCase();
                 if (pageText.includes('japanese') || pageText.includes('japan')) {
@@ -581,12 +550,8 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                 } else if (pageText.includes('korean') || pageText.includes('korea')) {
                     metadata.country = 'Korea';
                 }
-                if (metadata.country) {
-                    console.log(`Found country (text analysis): ${metadata.country}`);
-                }
             }
 
-            // STRATEGY 5: Basic type detection from title if still missing
             if (!metadata.type && animeTitle) {
                 const titleLower = animeTitle.toLowerCase();
                 if (titleLower.includes('movie') || titleLower.includes('film')) {
@@ -596,20 +561,13 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
                 } else if (titleLower.includes('special')) {
                     metadata.type = 'Special';
                 } else {
-                    metadata.type = 'TV Series'; // Default assumption
+                    metadata.type = 'TV Series';
                 }
-                console.log(`Found type (title analysis): ${metadata.type}`);
             }
 
-            // Log final results
-            console.log('Final metadata extracted:', {
-                type: metadata.type || 'MISSING',
-                genres: metadata.genres || 'MISSING', 
-                country: metadata.country || 'MISSING',
-                status: metadata.status || 'MISSING',
-                released: metadata.released || 'MISSING',
-                description: metadata.description ? 'FOUND' : 'MISSING'
-            });
+            if (!metadata.description) {
+                metadata.description = "No description available for this anime.";
+            }
 
             return metadata;
         }, anime.title);
@@ -621,7 +579,6 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
             source: '123animes'
         };
 
-        // Auto-save to database
         await saveAnime(finalAnimeData);
         
         return finalAnimeData;
@@ -634,7 +591,6 @@ const extractAnimeMetadataFast = async (anime, browser, attempt = 1) => {
     }
 };
 
-// NEW: Function to update existing anime with missing metadata
 export const updateMissingMetadata = async (limit = 20) => {
     console.log(`🔄 Starting to update anime with missing metadata...`);
     
@@ -650,7 +606,6 @@ export const updateMissingMetadata = async (limit = 20) => {
     });
 
     try {
-        // Import the anime service to get anime with missing metadata
         const { getAnimeWithMissingMetadata } = await import('./database/services/animeService.js');
         
         const animeToUpdate = await getAnimeWithMissingMetadata(limit);
@@ -666,7 +621,7 @@ export const updateMissingMetadata = async (limit = 20) => {
             };
         }
 
-        const updateLimit = pLimit(2); // Process 2 at a time for updates
+        const updateLimit = pLimit(2);
         
         const updatePromises = animeToUpdate.map((anime, index) =>
             updateLimit(async () => {
@@ -700,7 +655,6 @@ export const updateMissingMetadata = async (limit = 20) => {
     }
 };
 
-// Usage example function
 export const scrapeAll501Pages = async () => {
     console.log(`🎬 Starting to scrape all 501 pages of anime...`);
     const startTime = Date.now();
@@ -708,7 +662,7 @@ export const scrapeAll501Pages = async () => {
     const result = await scrapeFilmList100(1, 501);
     
     const endTime = Date.now();
-    const totalTime = (endTime - startTime) / 1000 / 60; // in minutes
+    const totalTime = (endTime - startTime) / 1000 / 60;
     
     console.log(`\n⏱️ Total scraping time: ${totalTime.toFixed(2)} minutes`);
     console.log(`📈 Average time per page: ${(totalTime / 501).toFixed(2)} minutes`);
@@ -716,8 +670,7 @@ export const scrapeAll501Pages = async () => {
     return result;
 };
 
-// Alternative: Scrape in batches for better resource management
-export const scrapeInBatches = async (batchSize = 10) => { // Further reduced batch size
+export const scrapeInBatches = async (batchSize = 10) => {
     console.log(`🎬 Starting to scrape 501 pages in batches of ${batchSize}...`);
     
     let allResults = {
@@ -745,7 +698,6 @@ export const scrapeInBatches = async (batchSize = 10) => { // Further reduced ba
         
         console.log(`✅ Batch completed: ${batchResult.pages_processed} pages processed`);
         
-        // Longer delay between batches for stability
         if (startPage + batchSize <= 501) {
             console.log(`⏳ Waiting 10 seconds before next batch...`);
             await delay(10000);

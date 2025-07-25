@@ -307,7 +307,24 @@ app.get('/episode-stream', async (req, res) => {
     }
 });
 
-// root
+// Example: http://localhost:5000/scrape-pages?start=281&end=300
+app.get('/scrape-pages', async (req, res) => {
+    try {
+        const startPage = parseInt(req.query.start) || 1;
+        const endPage = parseInt(req.query.end) || startPage;
+        if (startPage < 1 || endPage < startPage) {
+            return res.status(400).json({ success: false, error: 'Invalid start or end page.' });
+        }
+        const result = await scrapeFilmList100(startPage, endPage);
+        res.json({
+            message: `Scraped pages ${startPage} to ${endPage}`,
+            ...result
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // http://localhost:5000/hianime-top10
 // http://localhost:5000/hianime-weekly-top10
 // http://localhost:5000/hianime-monthly-top10

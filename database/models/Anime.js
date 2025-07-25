@@ -79,6 +79,6 @@ animeSchema.pre('save', function(next) {
     next();
 });
 
-const Anime = mongoose.model('Anime', animeSchema, 'animelits');
+const Anime = mongoose.model('Anime', animeSchema, 'animelists');
 
 export default Anime;
